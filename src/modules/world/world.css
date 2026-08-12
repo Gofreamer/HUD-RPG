@@ -1,0 +1,293 @@
+/* src/modules/world/world.css */
+/* HUD estilo Sword Art Online clássico */
+
+#world-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(160deg, #0a0e17 0%, #111827 40%, #0f172a 100%);
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  z-index: 50;
+}
+
+#world-screen.visible {
+  opacity: 1;
+}
+
+/* ========== BARRA SUPERIOR ========== */
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 70%, transparent 100%);
+  pointer-events: none;
+}
+
+.hud-top > * {
+  pointer-events: auto;
+}
+
+/* Bloco do personagem (esquerda) */
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.player-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #1e3a5f, #0f172a);
+  border: 2px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #93c5fd;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
+}
+
+.player-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-name {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #f1f5f9;
+  text-shadow: 0 0 8px rgba(147, 197, 253, 0.4);
+}
+
+.player-level {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+/* Barra de HP */
+.hp-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 180px;
+}
+
+.hp-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.hp-bar-container {
+  height: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.45);
+}
+
+.hp-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* Lado direito (Menu / Logout) */
+.hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-hud {
+  background: rgba(30, 58, 95, 0.7);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  color: #93c5fd;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.btn-hud:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-hud.logout {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.btn-hud.logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+}
+
+/* ========== ÁREA CENTRAL ========== */
+.world-center {
+  position: absolute;
+  inset: 72px 0 70px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.welcome-text {
+  font-size: 1.6rem;
+  font-weight: 300;
+  letter-spacing: 0.25em;
+  color: #93c5fd;
+  text-transform: uppercase;
+  opacity: 0.85;
+  text-shadow: 0 0 30px rgba(147, 197, 253, 0.35);
+}
+
+.character-name-large {
+  font-size: 3.2rem;
+  font-weight: 200;
+  letter-spacing: 0.12em;
+  color: #f8fafc;
+  text-shadow: 0 0 40px rgba(147, 197, 253, 0.5);
+}
+
+.location-badge {
+  margin-top: 8px;
+  padding: 6px 18px;
+  background: rgba(30, 58, 95, 0.5);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+/* ========== BARRA INFERIOR ========== */
+.hud-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
+}
+
+.location-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.location-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.location-name {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  letter-spacing: 0.04em;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-quick {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-quick:hover {
+  border-color: #3b82f6;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+/* Stats laterais (opcional, estilo SAO) */
+.stats-panel {
+  position: absolute;
+  top: 90px;
+  left: 20px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  min-width: 130px;
+  backdrop-filter: blur(8px);
+}
+
+.stats-title {
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: #64748b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+  color: #cbd5e1;
+}
+
+.stat-row span:last-child {
+  color: #93c5fd;
+  font-weight: 600;
+}

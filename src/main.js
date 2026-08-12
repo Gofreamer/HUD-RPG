@@ -5,58 +5,76 @@ import './styles/global.css';
 import { LinkStart } from './modules/intro/LinkStart.js';
 import { LoginUI } from './modules/auth/LoginUI.js';
 import { AuthService } from './modules/auth/AuthService.js';
+import { WorldUI } from './modules/world/WorldUI.js';
 
 const authService = new AuthService();
+let currentWorld = null;
 
 async function startApp() {
-  // 1. Toca a animação Link Start
+  // Verifica se o usuário já está logado (refresh da página)
+  authService.onAuthChange(async (user) => {
+    if (user) {
+      // Já logado → vai direto pro mundo
+      const playerData = await authService.getPlayerData(user.uid);
+      if (playerData) {
+        enterWorld(playerData);
+        return;
+      }
+    }
+    // Não logado → começa a animação
+    playIntro();
+  });
+}
+
+function playIntro() {
+  // Remove qualquer tela antiga
+  document.getElementById('world-screen')?.remove();
+  document.getElementById('login-screen')?.remove();
+
   const linkStart = new LinkStart(() => {
-    // 2. Quando terminar, mostra a tela de login
     showLogin();
   });
-
-  await linkStart.play();
+  linkStart.play();
 }
 
 function showLogin() {
   const loginUI = new LoginUI({
     onLogin: async (account, password) => {
-      await authService.login(account, password);
+      const user = await authService.login(account, password);
+      const playerData = await authService.getPlayerData(user.uid);
       loginUI.hide();
-      enterWorld();
+      enterWorld(playerData);
     },
     onRegister: async (account, password) => {
-      await authService.register(account, password);
+      const user = await authService.register(account, password);
+      const playerData = await authService.getPlayerData(user.uid);
       loginUI.hide();
-      enterWorld();
+      enterWorld(playerData);
     }
   });
 
   loginUI.show();
 }
 
-function enterWorld() {
-  // Por enquanto só um placeholder
-  // Depois vamos criar o módulo world/
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div style="
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      height:100%;
-      background:#0a0a12;
-      color:#8ab4f8;
-      font-family:system-ui;
-      gap:1rem;
-    ">
-      <h1 style="font-weight:300;letter-spacing:0.2em;">GRPG</h1>
-      <p>Link Start completo. Mundo em construção...</p>
-      <p style="opacity:0.6;font-size:0.9rem;">Você está logado.</p>
-    </div>
-  `;
+function enterWorld(playerData) {
+  // Se já existir uma tela de mundo, remove
+  if (currentWorld) {
+    currentWorld.hide();
+  }
+
+  currentWorld = new WorldUI({
+    playerData,
+    onLogout: async () => {
+      await authService.logout();
+      currentWorld.hide();
+      currentWorld = null;
+      // Volta pro Link Start
+      setTimeout(() => playIntro(), 300);
+    }
+  });
+
+  currentWorld.show();
 }
 
-// Inicia tudo
+// Inicia
 startApp();
