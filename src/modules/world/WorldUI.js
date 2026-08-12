@@ -1,9 +1,19 @@
 // src/modules/world/WorldUI.js
-// HUD SAO + Menu + Inventário + Skills + Party + Equipamento + Títulos + Admin
-// Atualização em tempo real sem tela preta
-
 import './world.css';
 import { Sound } from '../utils/Sound.js';
+
+const CONDITION_LABELS = {
+  normal: 'Normal',
+  ferido: 'Ferido',
+  exausto: 'Exausto',
+  critico: 'Crítico'
+};
+
+const RARITY_LABELS = {
+  comum: 'Comum',
+  raro: 'Raro',
+  unico: 'Único'
+};
 
 export class WorldUI {
   constructor({ playerData, uid, authService, onLogout }) {
@@ -12,17 +22,15 @@ export class WorldUI {
     this.authService = authService;
     this.onLogout = onLogout;
     this.container = null;
-    this.currentPanel = null; // menu | inventory | skills | party | equipment | titles | admin
+    this.currentPanel = null;
   }
 
   show() {
     this.createDOM();
     this.bindEvents();
-    // Listener em tempo real
     this.authService.listenPlayer(this.uid, (data) => {
       this.player = data;
       this.updateHUD();
-      // Se um painel estiver aberto, re-renderiza o conteúdo
       if (this.currentPanel && this.currentPanel !== 'admin') {
         this.renderCurrentPanel();
       }
@@ -40,6 +48,10 @@ export class WorldUI {
           <div class="player-details">
             <div class="player-name" id="hud-name">—</div>
             <div class="player-level" id="hud-level">Lv. 1</div>
+            <div class="player-meta">
+              <span class="condition-badge" id="hud-condition">Normal</span>
+              <span class="zone-badge" id="hud-zone">Área Segura</span>
+            </div>
           </div>
           <div class="bars-block">
             <div class="hp-block">
@@ -64,6 +76,7 @@ export class WorldUI {
       <div class="world-center">
         <div class="welcome-text">Bem-vindo ao GRPG</div>
         <div class="character-name-large" id="hud-name-large">—</div>
+        <div class="guild-line" id="hud-guild" style="display:none"></div>
         <div class="location-badge" id="hud-location-badge">—</div>
         <div class="title-badge" id="hud-title-badge" style="display:none"></div>
       </div>
@@ -99,7 +112,20 @@ export class WorldUI {
     const mpPercent = Math.max(0, Math.min(100, ((p.mp || 0) / (p.maxMp || 1)) * 100));
     const initial = (p.displayName || p.account || '?').charAt(0).toUpperCase();
 
-    this.setText('hud-avatar', initial);
+    // Avatar
+    const avatarEl = this.container.querySelector('#hud-avatar');
+    if (avatarEl) {
+      if (p.avatarUrl) {
+        avatarEl.style.backgroundImage = `url(${p.avatarUrl})`;
+        avatarEl.style.backgroundSize = 'cover';
+        avatarEl.style.backgroundPosition = 'center';
+        avatarEl.textContent = '';
+      } else {
+        avatarEl.style.backgroundImage = '';
+        avatarEl.textContent = initial;
+      }
+    }
+
     this.setText('hud-name', p.displayName || p.account || '—');
     this.setText('hud-level', `Lv. ${p.level || 1}  ·  ${p.class || 'Aventureiro'}`);
     this.setText('hud-name-large', p.displayName || p.account || '—');
@@ -114,7 +140,34 @@ export class WorldUI {
     if (hpFill) hpFill.style.width = `${hpPercent}%`;
     if (mpFill) mpFill.style.width = `${mpPercent}%`;
 
-    // Título ativo
+    // Condição
+    const cond = p.condition || 'normal';
+    const condEl = this.container.querySelector('#hud-condition');
+    if (condEl) {
+      condEl.textContent = CONDITION_LABELS[cond] || 'Normal';
+      condEl.className = `condition-badge cond-${cond}`;
+    }
+
+    // Zona
+    const zone = p.zoneType || 'safe';
+    const zoneEl = this.container.querySelector('#hud-zone');
+    if (zoneEl) {
+      zoneEl.textContent = zone === 'combat' ? 'Área de Combate' : 'Área Segura';
+      zoneEl.className = `zone-badge zone-${zone}`;
+    }
+
+    // Guilda
+    const guildEl = this.container.querySelector('#hud-guild');
+    if (guildEl) {
+      if (p.guild) {
+        guildEl.style.display = 'block';
+        guildEl.textContent = `「 ${p.guild} 」`;
+      } else {
+        guildEl.style.display = 'none';
+      }
+    }
+
+    // Título
     const titleBadge = this.container.querySelector('#hud-title-badge');
     if (titleBadge) {
       if (p.activeTitle) {
@@ -140,7 +193,7 @@ export class WorldUI {
       `;
     }
 
-    // Botões de ação (Admin)
+    // Actions
     const actions = this.container.querySelector('#hud-actions');
     if (actions) {
       actions.innerHTML = `
@@ -148,7 +201,6 @@ export class WorldUI {
         <button class="btn-hud" id="btn-menu">Menu</button>
         <button class="btn-hud logout" id="btn-logout">Sair</button>
       `;
-      // Re-bind
       actions.querySelector('#btn-logout')?.addEventListener('click', () => this.handleLogout());
       actions.querySelector('#btn-menu')?.addEventListener('click', () => this.openPanel('menu'));
       actions.querySelector('#btn-admin')?.addEventListener('click', () => this.openPanel('admin'));
@@ -167,7 +219,6 @@ export class WorldUI {
         this.openPanel(btn.dataset.panel);
       });
     });
-
     this.container.querySelector('#panel-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'panel-overlay') this.closePanel();
     });
@@ -181,7 +232,6 @@ export class WorldUI {
       this.authService.stopPlayerListener();
       await this.onLogout();
     } catch (err) {
-      console.error(err);
       if (btn) { btn.textContent = 'Sair'; btn.disabled = false; }
     }
   }
@@ -196,29 +246,25 @@ export class WorldUI {
   closePanel() {
     this.currentPanel = null;
     const overlay = this.container?.querySelector('#panel-overlay');
-    if (overlay) {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-    }
+    if (overlay) { overlay.classList.add('hidden'); overlay.innerHTML = ''; }
   }
 
   renderCurrentPanel() {
     const overlay = this.container.querySelector('#panel-overlay');
     if (!overlay || !this.currentPanel) return;
     overlay.classList.remove('hidden');
-
-    switch (this.currentPanel) {
-      case 'menu': this.renderMenu(overlay); break;
-      case 'inventory': this.renderInventory(overlay); break;
-      case 'skills': this.renderSkills(overlay); break;
-      case 'party': this.renderParty(overlay); break;
-      case 'equipment': this.renderEquipment(overlay); break;
-      case 'titles': this.renderTitles(overlay); break;
-      case 'admin': this.renderAdmin(overlay); break;
-    }
+    const map = {
+      menu: () => this.renderMenu(overlay),
+      inventory: () => this.renderInventory(overlay),
+      skills: () => this.renderSkills(overlay),
+      party: () => this.renderParty(overlay),
+      equipment: () => this.renderEquipment(overlay),
+      titles: () => this.renderTitles(overlay),
+      admin: () => this.renderAdmin(overlay)
+    };
+    map[this.currentPanel]?.();
   }
 
-  // —— MENU ——
   renderMenu(overlay) {
     const p = this.player;
     overlay.innerHTML = `
@@ -230,7 +276,9 @@ export class WorldUI {
             <p><strong>Nome:</strong> ${this.escape(p.displayName)}</p>
             <p><strong>Classe:</strong> ${this.escape(p.class || 'Aventureiro')}</p>
             <p><strong>Nível:</strong> ${p.level || 1}</p>
-            <p><strong>Conta:</strong> ${this.escape(p.account)}</p>
+            <p><strong>Condição:</strong> ${CONDITION_LABELS[p.condition] || 'Normal'}</p>
+            <p><strong>Zona:</strong> ${(p.zoneType === 'combat') ? 'Área de Combate' : 'Área Segura'}</p>
+            ${p.guild ? `<p><strong>Guilda:</strong> ${this.escape(p.guild)}</p>` : ''}
             ${p.activeTitle ? `<p><strong>Título:</strong> ${this.escape(p.activeTitle)}</p>` : ''}
           </div>
           <div class="menu-section">
@@ -244,11 +292,7 @@ export class WorldUI {
               <div>LUK <strong>${p.stats?.luk ?? 10}</strong></div>
             </div>
           </div>
-          <div class="menu-section">
-            <h3>Localização</h3>
-            <p>${this.escape(p.location || 'Cidade dos Iniciantes')}</p>
-            <p style="opacity:0.7;font-size:0.85rem">${this.escape(p.region || '')}</p>
-          </div>
+          ${p.appearance ? `<div class="menu-section"><h3>Aparência</h3><p style="line-height:1.45">${this.escape(p.appearance)}</p></div>` : ''}
           <div class="menu-section">
             <button class="btn-panel" id="menu-logout">Sair do Jogo</button>
           </div>
@@ -258,15 +302,24 @@ export class WorldUI {
     overlay.querySelector('#menu-logout').onclick = () => this.handleLogout();
   }
 
-  // —— INVENTÁRIO ——
+  rarityClass(r) {
+    const v = (r || 'comum').toLowerCase();
+    if (v === 'raro') return 'rarity-raro';
+    if (v === 'unico' || v === 'único') return 'rarity-unico';
+    return 'rarity-comum';
+  }
+
   renderInventory(overlay) {
     const items = this.player.inventory || [];
     let html = items.length === 0
       ? `<div class="empty-inventory">Inventário vazio.<br>O mestre distribuirá itens nas cenas.</div>`
-      : items.map((item, i) => `
-        <div class="inv-item">
+      : items.map(item => `
+        <div class="inv-item ${this.rarityClass(item.rarity)}">
           <div>
-            <div class="inv-item-name">${this.escape(item.name || 'Item')}</div>
+            <div class="inv-item-name">
+              ${this.escape(item.name || 'Item')}
+              <span class="rarity-tag">${RARITY_LABELS[(item.rarity || 'comum').toLowerCase()] || 'Comum'}</span>
+            </div>
             ${item.description ? `<div class="inv-desc">${this.escape(item.description)}</div>` : ''}
           </div>
           <div class="inv-item-qty">x${item.qty || 1}</div>
@@ -280,12 +333,10 @@ export class WorldUI {
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
   }
 
-  // —— SKILLS ——
   renderSkills(overlay) {
     const skills = (this.player.skills && this.player.skills.length)
       ? this.player.skills
       : this.getDefaultSkills();
-
     const html = skills.map(s => `
       <div class="inv-item">
         <div>
@@ -334,11 +385,10 @@ export class WorldUI {
     ];
   }
 
-  // —— PARTY ——
   renderParty(overlay) {
     const party = this.player.party || [];
     let html = party.length === 0
-      ? `<div class="empty-inventory">Você não está em nenhuma party.<br><br>Partys são formadas pelo mestre no Discord.<br>Quando fizer parte de um grupo, os membros aparecerão aqui.</div>`
+      ? `<div class="empty-inventory">Você não está em nenhuma party.<br><br>Partys são formadas pelo mestre no Discord.</div>`
       : party.map(m => `
         <div class="inv-item">
           <div>
@@ -356,28 +406,24 @@ export class WorldUI {
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
   }
 
-  // —— EQUIPAMENTO ——
   renderEquipment(overlay) {
     const eq = this.player.equipment || {};
     const slots = [
-      { key: 'cabeca', label: 'Cabeça' },
-      { key: 'peito', label: 'Peito' },
-      { key: 'maos', label: 'Mãos' },
-      { key: 'pernas', label: 'Pernas' },
-      { key: 'pes', label: 'Pés' },
-      { key: 'arma', label: 'Arma' },
-      { key: 'acessorio1', label: 'Acessório 1' },
-      { key: 'acessorio2', label: 'Acessório 2' }
+      { key: 'cabeca', label: 'Cabeça' }, { key: 'peito', label: 'Peito' },
+      { key: 'maos', label: 'Mãos' }, { key: 'pernas', label: 'Pernas' },
+      { key: 'pes', label: 'Pés' }, { key: 'arma', label: 'Arma' },
+      { key: 'acessorio1', label: 'Acessório 1' }, { key: 'acessorio2', label: 'Acessório 2' }
     ];
-
     const html = slots.map(s => {
       const item = eq[s.key];
+      const rarity = item ? this.rarityClass(item.rarity) : '';
       return `
-        <div class="inv-item">
+        <div class="inv-item ${rarity}">
           <div>
             <div class="inv-item-name">${s.label}</div>
             <div class="inv-desc">${item ? this.escape(item.name) : '— vazio —'}${item?.description ? ' · ' + this.escape(item.description) : ''}</div>
           </div>
+          ${item?.rarity ? `<span class="rarity-tag">${RARITY_LABELS[(item.rarity || '').toLowerCase()] || ''}</span>` : ''}
         </div>`;
     }).join('');
 
@@ -389,13 +435,11 @@ export class WorldUI {
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
   }
 
-  // —— TÍTULOS ——
   renderTitles(overlay) {
     const titles = this.player.titles || [];
     const active = this.player.activeTitle || null;
-
     let html = titles.length === 0
-      ? `<div class="empty-inventory">Nenhum título conquistado ainda.<br>Títulos são concedidos pelo mestre e podem dar vantagens.</div>`
+      ? `<div class="empty-inventory">Nenhum título conquistado ainda.</div>`
       : titles.map(t => `
         <div class="inv-item ${active === t.name ? 'title-active' : ''}">
           <div>
@@ -415,20 +459,18 @@ export class WorldUI {
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
   }
 
-  // —— ADMIN ——
   async renderAdmin(overlay) {
     overlay.innerHTML = `
       <div class="side-panel admin-panel">
         <div class="panel-header"><h2>Painel Admin</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body"><p style="color:#94a3b8;font-size:0.85rem">Carregando jogadores...</p></div>
+        <div class="panel-body"><p style="color:#94a3b8;font-size:0.85rem">Carregando...</p></div>
       </div>`;
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
-
     try {
       const players = await this.authService.getAllPlayers();
       this.renderAdminList(overlay, players);
-    } catch (err) {
-      overlay.querySelector('.panel-body').innerHTML = `<p style="color:#fca5a5">Erro ao carregar. Verifique as regras do Database.</p>`;
+    } catch {
+      overlay.querySelector('.panel-body').innerHTML = `<p style="color:#fca5a5">Erro ao carregar jogadores.</p>`;
     }
   }
 
@@ -442,19 +484,17 @@ export class WorldUI {
             <div class="admin-player">
               <div>
                 <strong>${this.escape(p.displayName || p.account)}</strong>
-                <span style="opacity:0.6;font-size:0.8rem"> · Lv.${p.level || 1} · ${this.escape(p.class || '-')}</span>
+                <span style="opacity:0.6;font-size:0.8rem"> · Lv.${p.level || 1}</span>
               </div>
               <button class="btn-tiny edit-player" data-uid="${p.uid}">Editar</button>
             </div>`).join('')}
         </div>
       </div>
       <div id="admin-edit-area"></div>`;
-
     body.querySelectorAll('.edit-player').forEach(btn => {
       btn.onclick = () => {
         Sound.click();
-        const player = players.find(p => p.uid === btn.dataset.uid);
-        this.renderAdminEdit(player);
+        this.renderAdminEdit(players.find(p => p.uid === btn.dataset.uid));
       };
     });
   }
@@ -464,8 +504,9 @@ export class WorldUI {
     if (!area || !player) return;
 
     area.innerHTML = `
-      <div class="admin-section" style="margin-top:16px;border-top:1px solid rgba(148,163,184,0.15);padding-top:14px">
+      <div class="admin-section admin-edit-block">
         <h3>Editando: ${this.escape(player.displayName || player.account)}</h3>
+
         <div class="admin-form">
           <label>Nome <input type="text" id="adm-name" value="${this.escape(player.displayName || '')}" /></label>
           <label>Nível <input type="number" id="adm-level" value="${player.level || 1}" min="1" /></label>
@@ -475,6 +516,22 @@ export class WorldUI {
           <label>Max MP <input type="number" id="adm-maxmp" value="${player.maxMp || 50}" /></label>
           <label>Localização <input type="text" id="adm-location" value="${this.escape(player.location || '')}" /></label>
           <label>Região <input type="text" id="adm-region" value="${this.escape(player.region || '')}" /></label>
+          <label>Guilda <input type="text" id="adm-guild" value="${this.escape(player.guild || '')}" placeholder="Nome da guilda" /></label>
+          <label>Avatar URL <input type="text" id="adm-avatar" value="${this.escape(player.avatarUrl || '')}" placeholder="https://..." /></label>
+          <label>Zona
+            <select id="adm-zone">
+              <option value="safe" ${(player.zoneType || 'safe') === 'safe' ? 'selected' : ''}>Área Segura</option>
+              <option value="combat" ${player.zoneType === 'combat' ? 'selected' : ''}>Área de Combate</option>
+            </select>
+          </label>
+          <label>Condição
+            <select id="adm-condition">
+              <option value="normal" ${(player.condition || 'normal') === 'normal' ? 'selected' : ''}>Normal</option>
+              <option value="ferido" ${player.condition === 'ferido' ? 'selected' : ''}>Ferido</option>
+              <option value="exausto" ${player.condition === 'exausto' ? 'selected' : ''}>Exausto</option>
+              <option value="critico" ${player.condition === 'critico' ? 'selected' : ''}>Crítico</option>
+            </select>
+          </label>
           <label>STR <input type="number" id="adm-str" value="${player.stats?.str ?? 10}" /></label>
           <label>AGI <input type="number" id="adm-agi" value="${player.stats?.agi ?? 10}" /></label>
           <label>VIT <input type="number" id="adm-vit" value="${player.stats?.vit ?? 10}" /></label>
@@ -482,6 +539,10 @@ export class WorldUI {
           <label>DEX <input type="number" id="adm-dex" value="${player.stats?.dex ?? 10}" /></label>
           <label>LUK <input type="number" id="adm-luk" value="${player.stats?.luk ?? 10}" /></label>
         </div>
+
+        <label class="full-label">Aparência
+          <textarea id="adm-appearance" rows="2" placeholder="Descrição visual do personagem...">${this.escape(player.appearance || '')}</textarea>
+        </label>
 
         <div class="admin-tabs">
           <button class="adm-tab active" data-tab="inv">Inventário</button>
@@ -492,11 +553,10 @@ export class WorldUI {
         </div>
         <div id="adm-tab-content"></div>
 
-        <button class="btn-panel" id="adm-save" style="margin-top:14px">Salvar Alterações</button>
-        <div id="adm-msg" style="margin-top:8px;font-size:0.85rem"></div>
+        <button class="btn-panel" id="adm-save">Salvar Alterações</button>
+        <div id="adm-msg"></div>
       </div>`;
 
-    // Estado local das listas
     this._editState = {
       inventory: [...(player.inventory || [])],
       skills: [...(player.skills || [])],
@@ -509,7 +569,7 @@ export class WorldUI {
     const showTab = (tab) => {
       area.querySelectorAll('.adm-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
       const content = area.querySelector('#adm-tab-content');
-      if (tab === 'inv') this.renderAdminListEditor(content, 'inventory', ['name', 'qty', 'description']);
+      if (tab === 'inv') this.renderAdminListEditor(content, 'inventory', ['name', 'qty', 'rarity', 'description']);
       if (tab === 'sk') this.renderAdminListEditor(content, 'skills', ['name', 'type', 'description']);
       if (tab === 'pt') this.renderAdminListEditor(content, 'party', ['name', 'class', 'level', 'role']);
       if (tab === 'ti') this.renderAdminListEditor(content, 'titles', ['name', 'bonus', 'description']);
@@ -524,7 +584,7 @@ export class WorldUI {
     area.querySelector('#adm-save').onclick = async () => {
       const msg = area.querySelector('#adm-msg');
       msg.textContent = 'Salvando...';
-      msg.style.color = '#94a3b8';
+      msg.className = 'adm-msg loading';
 
       const data = {
         displayName: area.querySelector('#adm-name').value.trim(),
@@ -535,6 +595,11 @@ export class WorldUI {
         maxMp: Number(area.querySelector('#adm-maxmp').value),
         location: area.querySelector('#adm-location').value.trim(),
         region: area.querySelector('#adm-region').value.trim(),
+        guild: area.querySelector('#adm-guild').value.trim(),
+        avatarUrl: area.querySelector('#adm-avatar').value.trim(),
+        zoneType: area.querySelector('#adm-zone').value,
+        condition: area.querySelector('#adm-condition').value,
+        appearance: area.querySelector('#adm-appearance').value.trim(),
         stats: {
           str: Number(area.querySelector('#adm-str').value),
           agi: Number(area.querySelector('#adm-agi').value),
@@ -554,13 +619,12 @@ export class WorldUI {
       try {
         await this.authService.updatePlayer(player.uid, data);
         Sound.success();
-        msg.textContent = 'Salvo com sucesso! (atualização em tempo real)';
-        msg.style.color = '#4ade80';
-        // NÃO faz refreshHUD() — o listener em tempo real cuida disso
+        msg.textContent = 'Salvo com sucesso!';
+        msg.className = 'adm-msg success';
       } catch (err) {
         Sound.error();
-        msg.textContent = 'Erro: ' + (err.message || 'falha ao salvar');
-        msg.style.color = '#fca5a5';
+        msg.textContent = 'Erro: ' + (err.message || 'falha');
+        msg.className = 'adm-msg error';
       }
     };
   }
@@ -570,22 +634,19 @@ export class WorldUI {
     container.innerHTML = `
       <div class="adm-list">
         ${list.map((item, idx) => `
-          <div class="adm-list-item">
-            <span>${this.escape(item.name || item[fields[0]] || '—')}</span>
-            <div>
+          <div class="adm-list-item ${item.rarity ? this.rarityClass(item.rarity) : ''}">
+            <span>${this.escape(item.name || '—')}${item.rarity ? ` · ${RARITY_LABELS[item.rarity] || item.rarity}` : ''}</span>
+            <div class="adm-list-actions">
               <button class="btn-tiny edit-item" data-idx="${idx}">Editar</button>
               <button class="btn-tiny danger del-item" data-idx="${idx}">✕</button>
             </div>
-          </div>`).join('') || '<p style="color:#64748b;font-size:0.85rem">Nenhum item.</p>'}
+          </div>`).join('') || '<p class="adm-empty">Nenhum item ainda.</p>'}
       </div>
-      <button class="btn-panel" id="adm-add-item" style="margin-top:10px">+ Adicionar</button>
+      <button class="btn-panel btn-add" id="adm-add-item">+ Adicionar</button>
     `;
 
     container.querySelectorAll('.edit-item').forEach(btn => {
-      btn.onclick = () => {
-        Sound.click();
-        this.openItemModal(key, fields, Number(btn.dataset.idx));
-      };
+      btn.onclick = () => { Sound.click(); this.openItemModal(key, fields, Number(btn.dataset.idx)); };
     });
     container.querySelectorAll('.del-item').forEach(btn => {
       btn.onclick = () => {
@@ -602,17 +663,12 @@ export class WorldUI {
 
   renderAdminEquipmentEditor(container) {
     const slots = [
-      { key: 'cabeca', label: 'Cabeça' },
-      { key: 'peito', label: 'Peito' },
-      { key: 'maos', label: 'Mãos' },
-      { key: 'pernas', label: 'Pernas' },
-      { key: 'pes', label: 'Pés' },
-      { key: 'arma', label: 'Arma' },
-      { key: 'acessorio1', label: 'Acessório 1' },
-      { key: 'acessorio2', label: 'Acessório 2' }
+      { key: 'cabeca', label: 'Cabeça' }, { key: 'peito', label: 'Peito' },
+      { key: 'maos', label: 'Mãos' }, { key: 'pernas', label: 'Pernas' },
+      { key: 'pes', label: 'Pés' }, { key: 'arma', label: 'Arma' },
+      { key: 'acessorio1', label: 'Acessório 1' }, { key: 'acessorio2', label: 'Acessório 2' }
     ];
     const eq = this._editState.equipment || {};
-
     container.innerHTML = slots.map(s => {
       const item = eq[s.key];
       return `
@@ -621,11 +677,10 @@ export class WorldUI {
           <button class="btn-tiny edit-eq" data-slot="${s.key}">${item ? 'Editar' : 'Definir'}</button>
         </div>`;
     }).join('');
-
     container.querySelectorAll('.edit-eq').forEach(btn => {
       btn.onclick = () => {
         Sound.click();
-        this.openItemModal('equipment', ['name', 'description'], btn.dataset.slot);
+        this.openItemModal('equipment', ['name', 'rarity', 'description'], btn.dataset.slot);
       };
     });
   }
@@ -635,51 +690,83 @@ export class WorldUI {
     const isNew = indexOrSlot === -1;
     const isEquip = key === 'equipment';
     let current = {};
+    if (isEquip) current = this._editState.equipment?.[indexOrSlot] || {};
+    else if (!isNew) current = this._editState[key][indexOrSlot] || {};
 
-    if (isEquip) {
-      current = this._editState.equipment?.[indexOrSlot] || {};
-    } else if (!isNew) {
-      current = this._editState[key][indexOrSlot] || {};
-    }
-
-    const fieldLabels = {
+    const labels = {
       name: 'Nome',
       qty: 'Quantidade',
       description: 'Descrição',
-      type: 'Tipo (Ativa/Passiva)',
+      type: 'Tipo',
       class: 'Classe',
       level: 'Nível',
-      role: 'Função (Líder/Membro)',
-      bonus: 'Bônus / Vantagem'
+      role: 'Função',
+      bonus: 'Bônus / Vantagem',
+      rarity: 'Raridade'
+    };
+
+    const titles = {
+      inventory: 'Item do Inventário',
+      skills: 'Skill',
+      party: 'Membro da Party',
+      titles: 'Título',
+      equipment: 'Equipamento'
     };
 
     modal.classList.remove('hidden');
     modal.innerHTML = `
       <div class="modal-box">
-        <h3>${isNew ? 'Adicionar' : 'Editar'} ${isEquip ? 'Equipamento' : key}</h3>
-        ${fields.map(f => `
-          <label>${fieldLabels[f] || f}
-            ${f === 'description' || f === 'bonus'
-              ? `<textarea id="modal-${f}" rows="3">${this.escape(current[f] || '')}</textarea>`
-              : `<input type="${f === 'qty' || f === 'level' ? 'number' : 'text'}" id="modal-${f}" value="${this.escape(String(current[f] ?? (f === 'qty' ? 1 : '')))}" />`
+        <div class="modal-header">
+          <h3>${isNew ? 'Adicionar' : 'Editar'} ${titles[key] || ''}</h3>
+          <button class="btn-close" id="modal-x">✕</button>
+        </div>
+        <div class="modal-body">
+          ${fields.map(f => {
+            if (f === 'rarity') {
+              const val = (current.rarity || 'comum').toLowerCase();
+              return `
+                <div class="field">
+                  <label>Raridade</label>
+                  <select id="modal-rarity">
+                    <option value="comum" ${val === 'comum' ? 'selected' : ''}>Comum</option>
+                    <option value="raro" ${val === 'raro' ? 'selected' : ''}>Raro</option>
+                    <option value="unico" ${val === 'unico' || val === 'único' ? 'selected' : ''}>Único</option>
+                  </select>
+                </div>`;
             }
-          </label>`).join('')}
-        <div class="modal-actions">
-          <button class="btn-secondary" id="modal-cancel">Cancelar</button>
-          <button class="btn-primary" id="modal-save">Salvar</button>
+            if (f === 'description' || f === 'bonus') {
+              return `
+                <div class="field">
+                  <label>${labels[f] || f}</label>
+                  <textarea id="modal-${f}" rows="3" placeholder="${labels[f] || f}...">${this.escape(current[f] || '')}</textarea>
+                </div>`;
+            }
+            return `
+              <div class="field">
+                <label>${labels[f] || f}</label>
+                <input type="${f === 'qty' || f === 'level' ? 'number' : 'text'}"
+                  id="modal-${f}"
+                  value="${this.escape(String(current[f] ?? (f === 'qty' ? 1 : '')))}"
+                  placeholder="${labels[f] || f}" />
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" id="modal-cancel">Cancelar</button>
+          <button class="btn-modal-save" id="modal-save">Salvar</button>
         </div>
       </div>`;
 
-    modal.querySelector('#modal-cancel').onclick = () => {
-      modal.classList.add('hidden');
-      modal.innerHTML = '';
-    };
+    const close = () => { modal.classList.add('hidden'); modal.innerHTML = ''; };
+    modal.querySelector('#modal-cancel').onclick = close;
+    modal.querySelector('#modal-x').onclick = close;
 
     modal.querySelector('#modal-save').onclick = () => {
       const obj = {};
       fields.forEach(f => {
         const el = modal.querySelector(`#modal-${f}`);
-        obj[f] = f === 'qty' || f === 'level' ? Number(el.value) || 0 : el.value.trim();
+        if (!el) return;
+        obj[f] = (f === 'qty' || f === 'level') ? Number(el.value) || 0 : el.value.trim();
       });
 
       if (isEquip) {
@@ -692,18 +779,15 @@ export class WorldUI {
       }
 
       Sound.success();
-      modal.classList.add('hidden');
-      modal.innerHTML = '';
+      close();
 
-      // Re-render tab content
       const content = this.container.querySelector('#adm-tab-content');
-      if (content) {
-        if (key === 'inventory') this.renderAdminListEditor(content, 'inventory', ['name', 'qty', 'description']);
-        if (key === 'skills') this.renderAdminListEditor(content, 'skills', ['name', 'type', 'description']);
-        if (key === 'party') this.renderAdminListEditor(content, 'party', ['name', 'class', 'level', 'role']);
-        if (key === 'titles') this.renderAdminListEditor(content, 'titles', ['name', 'bonus', 'description']);
-        if (key === 'equipment') this.renderAdminEquipmentEditor(content);
-      }
+      if (!content) return;
+      if (key === 'inventory') this.renderAdminListEditor(content, 'inventory', ['name', 'qty', 'rarity', 'description']);
+      if (key === 'skills') this.renderAdminListEditor(content, 'skills', ['name', 'type', 'description']);
+      if (key === 'party') this.renderAdminListEditor(content, 'party', ['name', 'class', 'level', 'role']);
+      if (key === 'titles') this.renderAdminListEditor(content, 'titles', ['name', 'bonus', 'description']);
+      if (key === 'equipment') this.renderAdminEquipmentEditor(content);
     };
   }
 

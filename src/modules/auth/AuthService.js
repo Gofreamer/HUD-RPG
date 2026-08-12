@@ -1,6 +1,4 @@
 // src/modules/auth/AuthService.js
-// Serviço de autenticação + dados do jogador + tempo real
-
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
@@ -26,13 +24,8 @@ export class AuthService {
     return ADMIN_ACCOUNTS.includes(account.toLowerCase().trim());
   }
 
-  async register(account, password) {
-    const email = this.toEmail(account);
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    const isAdmin = this.isAdminAccount(account);
-
-    await set(ref(database, `players/${user.uid}`), {
+  defaultPlayer(account, isAdmin = false) {
+    return {
       account: account.toLowerCase().trim(),
       displayName: account,
       characterCreated: false,
@@ -45,25 +38,31 @@ export class AuthService {
       maxMp: 50,
       location: 'Cidade dos Iniciantes',
       region: 'Aincrad — Andar 1',
+      zoneType: 'safe', // safe | combat
+      condition: 'normal', // normal | ferido | exausto | critico
+      guild: '',
+      avatarUrl: '',
       inventory: [],
       skills: [],
       party: [],
       equipment: {
-        cabeca: null,
-        peito: null,
-        maos: null,
-        pernas: null,
-        pes: null,
-        arma: null,
-        acessorio1: null,
-        acessorio2: null
+        cabeca: null, peito: null, maos: null, pernas: null,
+        pes: null, arma: null, acessorio1: null, acessorio2: null
       },
       titles: [],
       activeTitle: null,
       notes: '',
+      appearance: '',
       stats: { str: 10, agi: 10, vit: 10, int: 10, dex: 10, luk: 10 }
-    });
+    };
+  }
 
+  async register(account, password) {
+    const email = this.toEmail(account);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    const isAdmin = this.isAdminAccount(account);
+    await set(ref(database, `players/${user.uid}`), this.defaultPlayer(account, isAdmin));
     this.currentUser = user;
     return user;
   }
@@ -111,14 +110,11 @@ export class AuthService {
     return Object.entries(data).map(([uid, player]) => ({ uid, ...player }));
   }
 
-  // Listener em tempo real do player
   listenPlayer(uid, callback) {
     this.stopPlayerListener();
     const playerRef = ref(database, `players/${uid}`);
     const handler = (snapshot) => {
-      if (snapshot.exists()) {
-        callback(snapshot.val());
-      }
+      if (snapshot.exists()) callback(snapshot.val());
     };
     onValue(playerRef, handler);
     this._playerUnsub = () => off(playerRef, 'value', handler);
