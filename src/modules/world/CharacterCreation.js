@@ -180,6 +180,15 @@ export class CharacterCreation {
         box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
       }
       .btn-create:disabled { opacity: 0.45; cursor: not-allowed; }
+
+      @media (max-width: 520px) {
+        .creation-header { padding: 20px 16px 14px; }
+        .creation-header h1 { font-size: 1.3rem; }
+        .creation-body { padding: 16px; }
+        .creation-footer { padding: 12px 16px 20px; }
+        .class-grid { grid-template-columns: repeat(2, 1fr); }
+        .preview-stats { grid-template-columns: 1fr 1fr; }
+      }
       .creation-error { font-size: 0.85rem; color: #fca5a5; min-height: 20px; text-align: center; }
     `;
     document.head.appendChild(style);

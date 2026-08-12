@@ -1,5 +1,5 @@
 // src/modules/world/WorldUI.js
-// HUD estilo SAO + Menu + Inventário + Painel Admin
+// HUD estilo SAO + Menu + Inventário + Skills + Party + Admin
 
 import './world.css';
 
@@ -12,6 +12,8 @@ export class WorldUI {
     this.container = null;
     this.menuOpen = false;
     this.inventoryOpen = false;
+    this.skillsOpen = false;
+    this.partyOpen = false;
     this.adminOpen = false;
   }
 
@@ -71,7 +73,7 @@ export class WorldUI {
         <div class="location-badge">${this.escape(p.location || 'Cidade dos Iniciantes')}</div>
       </div>
 
-      <!-- PAINEL DE STATS -->
+      <!-- PAINEL DE STATS (desktop) -->
       <div class="stats-panel">
         <div class="stats-title">Status</div>
         <div class="stat-row"><span>STR</span><span>${p.stats?.str ?? 10}</span></div>
@@ -91,8 +93,8 @@ export class WorldUI {
         </div>
         <div class="quick-actions">
           <button class="btn-quick" id="btn-inventory">Inventário</button>
-          <button class="btn-quick" disabled>Skills</button>
-          <button class="btn-quick" disabled>Party</button>
+          <button class="btn-quick" id="btn-skills">Skills</button>
+          <button class="btn-quick" id="btn-party">Party</button>
         </div>
       </div>
 
@@ -119,13 +121,14 @@ export class WorldUI {
 
     this.container.querySelector('#btn-menu').addEventListener('click', () => this.toggleMenu());
     this.container.querySelector('#btn-inventory').addEventListener('click', () => this.toggleInventory());
+    this.container.querySelector('#btn-skills').addEventListener('click', () => this.toggleSkills());
+    this.container.querySelector('#btn-party').addEventListener('click', () => this.toggleParty());
 
     const adminBtn = this.container.querySelector('#btn-admin');
     if (adminBtn) {
       adminBtn.addEventListener('click', () => this.toggleAdmin());
     }
 
-    // Fechar overlay clicando fora
     this.container.querySelector('#panel-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'panel-overlay') this.closeAllPanels();
     });
@@ -195,11 +198,14 @@ export class WorldUI {
 
     let itemsHtml = '';
     if (items.length === 0) {
-      itemsHtml = `<div class="empty-inventory">Seu inventário está vazio.<br>Itens aparecerão aqui conforme você avança no mundo.</div>`;
+      itemsHtml = `<div class="empty-inventory">Seu inventário está vazio.<br>Itens aparecerão aqui conforme o mestre distribuir nas cenas.</div>`;
     } else {
       itemsHtml = items.map(item => `
         <div class="inv-item">
-          <div class="inv-item-name">${this.escape(item.name || 'Item')}</div>
+          <div>
+            <div class="inv-item-name">${this.escape(item.name || 'Item')}</div>
+            ${item.description ? `<div style="font-size:0.78rem;color:#94a3b8;margin-top:2px">${this.escape(item.description)}</div>` : ''}
+          </div>
           <div class="inv-item-qty">x${item.qty || 1}</div>
         </div>
       `).join('');
@@ -217,6 +223,118 @@ export class WorldUI {
       </div>
     `;
     overlay.querySelector('#close-inv').addEventListener('click', () => this.closeAllPanels());
+  }
+
+  // ========== SKILLS ==========
+  toggleSkills() {
+    if (this.skillsOpen) return this.closeAllPanels();
+    this.closeAllPanels();
+    this.skillsOpen = true;
+
+    const skills = this.player.skills || this.getDefaultSkills();
+    const overlay = this.container.querySelector('#panel-overlay');
+    overlay.classList.remove('hidden');
+
+    const skillsHtml = skills.map(s => `
+      <div class="inv-item">
+        <div>
+          <div class="inv-item-name">${this.escape(s.name)}</div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px">${this.escape(s.description || '')}</div>
+        </div>
+        <div class="inv-item-qty">${s.type || 'Ativa'}</div>
+      </div>
+    `).join('');
+
+    overlay.innerHTML = `
+      <div class="side-panel">
+        <div class="panel-header">
+          <h2>Skills</h2>
+          <button class="btn-close" id="close-skills">✕</button>
+        </div>
+        <div class="panel-body">
+          <div class="menu-section">
+            <h3>Classe: ${this.escape(this.player.class || 'Aventureiro')}</h3>
+          </div>
+          <div class="inventory-grid">
+            ${skills.length ? skillsHtml : '<div class="empty-inventory">Nenhuma skill ainda.<br>O mestre pode liberar habilidades conforme a história.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+    overlay.querySelector('#close-skills').addEventListener('click', () => this.closeAllPanels());
+  }
+
+  getDefaultSkills() {
+    const classId = (this.player.classId || '').toLowerCase();
+    const defaults = {
+      espadachim: [
+        { name: 'Corte Horizontal', description: 'Ataque básico com a espada.', type: 'Ativa' },
+        { name: 'Postura de Guarda', description: 'Aumenta defesa temporariamente.', type: 'Ativa' }
+      ],
+      mago: [
+        { name: 'Bola de Fogo', description: 'Projétil mágico de fogo.', type: 'Ativa' },
+        { name: 'Barreira Arcana', description: 'Escudo mágico básico.', type: 'Ativa' }
+      ],
+      assassino: [
+        { name: 'Ataque Furtivo', description: 'Alto dano pelas costas.', type: 'Ativa' },
+        { name: 'Passo Sombrio', description: 'Movimento rápido de curta distância.', type: 'Ativa' }
+      ],
+      curandeiro: [
+        { name: 'Cura Leve', description: 'Restaura uma pequena quantidade de HP.', type: 'Ativa' },
+        { name: 'Bênção', description: 'Aumenta resistência do alvo.', type: 'Ativa' }
+      ],
+      arqueiro: [
+        { name: 'Tiro Preciso', description: 'Ataque à distância focado.', type: 'Ativa' },
+        { name: 'Chuva de Flechas', description: 'Ataque em área com flechas.', type: 'Ativa' }
+      ]
+    };
+    return defaults[classId] || [
+      { name: 'Ataque Básico', description: 'Golpe simples.', type: 'Ativa' }
+    ];
+  }
+
+  // ========== PARTY ==========
+  toggleParty() {
+    if (this.partyOpen) return this.closeAllPanels();
+    this.closeAllPanels();
+    this.partyOpen = true;
+
+    const party = this.player.party || [];
+    const overlay = this.container.querySelector('#panel-overlay');
+    overlay.classList.remove('hidden');
+
+    let partyHtml = '';
+    if (party.length === 0) {
+      partyHtml = `
+        <div class="empty-inventory">
+          Você não está em nenhuma party no momento.<br><br>
+          Partys são formadas pelo mestre durante as cenas no Discord.<br>
+          Quando fizer parte de um grupo, os membros aparecerão aqui.
+        </div>`;
+    } else {
+      partyHtml = party.map(m => `
+        <div class="inv-item">
+          <div>
+            <div class="inv-item-name">${this.escape(m.name)}</div>
+            <div style="font-size:0.78rem;color:#94a3b8;margin-top:2px">${this.escape(m.class || '')} · Lv.${m.level || '?'}</div>
+          </div>
+          <div class="inv-item-qty">${m.role || 'Membro'}</div>
+        </div>
+      `).join('');
+    }
+
+    overlay.innerHTML = `
+      <div class="side-panel">
+        <div class="panel-header">
+          <h2>Party</h2>
+          <button class="btn-close" id="close-party">✕</button>
+        </div>
+        <div class="panel-body">
+          <div class="inventory-grid">${partyHtml}</div>
+        </div>
+      </div>
+    `;
+    overlay.querySelector('#close-party').addEventListener('click', () => this.closeAllPanels());
   }
 
   // ========== ADMIN ==========
@@ -283,6 +401,8 @@ export class WorldUI {
     const area = this.container.querySelector('#admin-edit-area');
     if (!area || !player) return;
 
+    const invStr = (player.inventory || []).map(i => `${i.name}|${i.qty || 1}|${i.description || ''}`).join('\n');
+
     area.innerHTML = `
       <div class="admin-section" style="margin-top:16px;border-top:1px solid rgba(148,163,184,0.15);padding-top:14px">
         <h3>Editando: ${this.escape(player.displayName || player.account)}</h3>
@@ -302,6 +422,14 @@ export class WorldUI {
           <label>DEX <input type="number" id="adm-dex" value="${player.stats?.dex ?? 10}" /></label>
           <label>LUK <input type="number" id="adm-luk" value="${player.stats?.luk ?? 10}" /></label>
         </div>
+
+        <div style="margin-top:14px">
+          <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:4px">
+            Inventário (um item por linha: Nome|Qtd|Descrição)
+          </label>
+          <textarea id="adm-inventory" style="width:100%;height:90px;background:rgba(30,41,59,0.8);border:1px solid rgba(148,163,184,0.25);border-radius:4px;color:#e2e8f0;padding:8px;font-size:0.85rem;resize:vertical">${this.escape(invStr)}</textarea>
+        </div>
+
         <button class="btn-panel" id="adm-save" style="margin-top:12px">Salvar Alterações</button>
         <div id="adm-msg" style="margin-top:8px;font-size:0.85rem"></div>
       </div>
@@ -311,6 +439,19 @@ export class WorldUI {
       const msg = area.querySelector('#adm-msg');
       msg.textContent = 'Salvando...';
       msg.style.color = '#94a3b8';
+
+      // Parse inventário
+      const invRaw = area.querySelector('#adm-inventory').value.trim();
+      const inventory = invRaw
+        ? invRaw.split('\n').filter(l => l.trim()).map(line => {
+            const [name, qty, ...desc] = line.split('|');
+            return {
+              name: (name || 'Item').trim(),
+              qty: Number(qty) || 1,
+              description: (desc.join('|') || '').trim()
+            };
+          })
+        : [];
 
       const data = {
         displayName: area.querySelector('#adm-name').value.trim(),
@@ -328,7 +469,8 @@ export class WorldUI {
           int: Number(area.querySelector('#adm-int').value),
           dex: Number(area.querySelector('#adm-dex').value),
           luk: Number(area.querySelector('#adm-luk').value)
-        }
+        },
+        inventory
       };
 
       try {
@@ -336,7 +478,6 @@ export class WorldUI {
         msg.textContent = 'Salvo com sucesso!';
         msg.style.color = '#4ade80';
 
-        // Se estiver editando o próprio personagem, atualiza a tela
         if (player.uid === this.uid) {
           this.player = { ...this.player, ...data };
           this.refreshHUD();
@@ -349,7 +490,6 @@ export class WorldUI {
   }
 
   refreshHUD() {
-    // Recria a tela com os dados atualizados
     this.hide();
     setTimeout(() => this.show(), 100);
   }
@@ -357,6 +497,8 @@ export class WorldUI {
   closeAllPanels() {
     this.menuOpen = false;
     this.inventoryOpen = false;
+    this.skillsOpen = false;
+    this.partyOpen = false;
     this.adminOpen = false;
     const overlay = this.container?.querySelector('#panel-overlay');
     if (overlay) {
