@@ -251,6 +251,12 @@ export class CharacterCreation {
           region: 'Aincrad — Andar 1',
           stats: { ...this.selectedClass.stats },
           inventory: [],
+          skills: [],
+          party: [],
+          equipment: { cabeca: null, peito: null, maos: null, pernas: null, pes: null, arma: null, acessorio1: null, acessorio2: null },
+          titles: [],
+          activeTitle: null,
+          notes: "",
           characterCreated: true,
           createdAt: Date.now()
         };

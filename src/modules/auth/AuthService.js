@@ -1,5 +1,5 @@
 // src/modules/auth/AuthService.js
-// Serviço de autenticação + dados do jogador
+// Serviço de autenticação + dados do jogador + tempo real
 
 import { 
   createUserWithEmailAndPassword, 
@@ -7,15 +7,15 @@ import {
   signOut,
   onAuthStateChanged
 } from "firebase/auth";
-import { ref, set, get, update } from "firebase/database";
+import { ref, set, get, update, onValue, off } from "firebase/database";
 import { auth, database } from "../../config/firebase.js";
 
-// Contas que têm poder de administrador do mundo
 const ADMIN_ACCOUNTS = ['admin', 'gm', 'gameMaster', 'mestre'];
 
 export class AuthService {
   constructor() {
     this.currentUser = null;
+    this._playerUnsub = null;
   }
 
   toEmail(account) {
@@ -32,7 +32,6 @@ export class AuthService {
     const user = userCredential.user;
     const isAdmin = this.isAdminAccount(account);
 
-    // Perfil inicial (ainda sem personagem criado)
     await set(ref(database, `players/${user.uid}`), {
       account: account.toLowerCase().trim(),
       displayName: account,
@@ -47,6 +46,21 @@ export class AuthService {
       location: 'Cidade dos Iniciantes',
       region: 'Aincrad — Andar 1',
       inventory: [],
+      skills: [],
+      party: [],
+      equipment: {
+        cabeca: null,
+        peito: null,
+        maos: null,
+        pernas: null,
+        pes: null,
+        arma: null,
+        acessorio1: null,
+        acessorio2: null
+      },
+      titles: [],
+      activeTitle: null,
+      notes: '',
       stats: { str: 10, agi: 10, vit: 10, int: 10, dex: 10, luk: 10 }
     });
 
@@ -62,6 +76,7 @@ export class AuthService {
   }
 
   async logout() {
+    this.stopPlayerListener();
     await signOut(auth);
     this.currentUser = null;
   }
@@ -78,7 +93,6 @@ export class AuthService {
     return snapshot.exists() ? snapshot.val() : null;
   }
 
-  // Salva os dados da criação de personagem
   async saveCharacter(uid, characterData) {
     await update(ref(database, `players/${uid}`), {
       ...characterData,
@@ -86,16 +100,34 @@ export class AuthService {
     });
   }
 
-  // Atualiza qualquer campo do player (usado pelo admin também)
   async updatePlayer(uid, data) {
     await update(ref(database, `players/${uid}`), data);
   }
 
-  // Lista todos os jogadores (apenas admin)
   async getAllPlayers() {
     const snapshot = await get(ref(database, 'players'));
     if (!snapshot.exists()) return [];
     const data = snapshot.val();
     return Object.entries(data).map(([uid, player]) => ({ uid, ...player }));
+  }
+
+  // Listener em tempo real do player
+  listenPlayer(uid, callback) {
+    this.stopPlayerListener();
+    const playerRef = ref(database, `players/${uid}`);
+    const handler = (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.val());
+      }
+    };
+    onValue(playerRef, handler);
+    this._playerUnsub = () => off(playerRef, 'value', handler);
+  }
+
+  stopPlayerListener() {
+    if (this._playerUnsub) {
+      this._playerUnsub();
+      this._playerUnsub = null;
+    }
   }
 }

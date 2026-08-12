@@ -2,6 +2,7 @@
 // Animação completa do Link Start (estilo SAO)
 
 import './intro.css';
+import { Sound } from '../utils/Sound.js';
 
 export class LinkStart {
   constructor(onComplete) {
@@ -23,6 +24,7 @@ export class LinkStart {
     
     // Sequência temporal da animação
     await this.wait(400);
+    Sound.linkStart();
     this.showText();
     
     await this.wait(1200);
