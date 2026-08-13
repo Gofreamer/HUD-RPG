@@ -11,6 +11,19 @@ import { CharacterCreation } from './modules/world/CharacterCreation.js';
 const authService = new AuthService();
 let currentWorld = null;
 let isStarting = false;
+let activeLinkStart = null;
+
+/** Remove imediatamente qualquer UI de entrada (login / link start / criação) */
+function clearEntryUI() {
+  document.getElementById('login-screen')?.remove();
+  document.getElementById('char-creation')?.remove();
+  const link = document.getElementById('link-start-container');
+  if (link) link.remove();
+  if (activeLinkStart) {
+    try { activeLinkStart.destroy(); } catch (_) {}
+    activeLinkStart = null;
+  }
+}
 
 async function startApp() {
   authService.onAuthChange(async (user) => {
@@ -19,13 +32,13 @@ async function startApp() {
     if (user) {
       const playerData = await authService.getPlayerData(user.uid);
       if (!playerData) {
-        // Dados não encontrados, força logout
         await authService.logout();
         return;
       }
 
+      clearEntryUI();
+
       if (!playerData.characterCreated) {
-        // Primeiro login → criação de personagem
         showCharacterCreation(user, playerData);
       } else {
         enterWorld(playerData, user.uid);
@@ -34,30 +47,38 @@ async function startApp() {
     }
 
     // Não logado
-    playIntro();
+    if (!document.getElementById('login-screen') && !document.getElementById('link-start-container')) {
+      playIntro();
+    }
   });
 }
 
 function playIntro() {
+  clearEntryUI();
   document.getElementById('world-screen')?.remove();
-  document.getElementById('link-start-container')?.remove();
-  document.getElementById('login-screen')?.remove();
-  document.getElementById('char-creation')?.remove();
+  if (currentWorld) {
+    currentWorld = null;
+  }
 
-  const linkStart = new LinkStart(() => {
+  activeLinkStart = new LinkStart(() => {
     showLogin();
   });
-  linkStart.play();
+  activeLinkStart.play();
 }
 
 function showLogin() {
+  // Evita login duplicado
+  if (document.getElementById('login-screen')) return;
+
   const loginUI = new LoginUI({
     onLogin: async (account, password) => {
       isStarting = true;
       try {
         const user = await authService.login(account, password);
         const playerData = await authService.getPlayerData(user.uid);
-        loginUI.hide();
+
+        // Remove login + HUD neural ANTES de entrar no mundo
+        clearEntryUI();
 
         if (!playerData.characterCreated) {
           showCharacterCreation(user, playerData);
@@ -73,7 +94,8 @@ function showLogin() {
       try {
         const user = await authService.register(account, password);
         const playerData = await authService.getPlayerData(user.uid);
-        loginUI.hide();
+
+        clearEntryUI();
         showCharacterCreation(user, playerData);
       } finally {
         isStarting = false;
@@ -85,19 +107,18 @@ function showLogin() {
 }
 
 function showCharacterCreation(user, playerData) {
+  clearEntryUI();
   document.getElementById('char-creation')?.remove();
 
   const creation = new CharacterCreation({
     account: playerData.account,
     onComplete: async (characterData) => {
-      // Se for conta admin, mantém a flag
       if (playerData.isAdmin) {
         characterData.isAdmin = true;
       }
       await authService.saveCharacter(user.uid, characterData);
       creation.hide();
 
-      // Busca dados atualizados e entra no mundo
       const updated = await authService.getPlayerData(user.uid);
       enterWorld(updated, user.uid);
     }
@@ -107,9 +128,16 @@ function showCharacterCreation(user, playerData) {
 }
 
 function enterWorld(playerData, uid) {
+  // Garante que nenhuma tela de entrada sobrou
+  clearEntryUI();
+
   if (currentWorld) {
     currentWorld.hide();
+    currentWorld = null;
   }
+
+  // Remove world antigo do DOM se existir
+  document.getElementById('world-screen')?.remove();
 
   currentWorld = new WorldUI({
     playerData,
@@ -117,14 +145,16 @@ function enterWorld(playerData, uid) {
     authService,
     onLogout: async () => {
       await authService.logout();
-      currentWorld.hide();
-      currentWorld = null;
-      setTimeout(() => playIntro(), 300);
+      if (currentWorld) {
+        currentWorld.hide();
+        currentWorld = null;
+      }
+      document.getElementById('world-screen')?.remove();
+      setTimeout(() => playIntro(), 350);
     }
   });
 
   currentWorld.show();
 }
 
-// Inicia
 startApp();

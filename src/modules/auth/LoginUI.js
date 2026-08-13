@@ -370,11 +370,21 @@ export class LoginUI {
 
       /* Mobile */
       @media (max-width: 560px) {
-        .nh-title { font-size: 1.15rem; letter-spacing: 0.35em; }
-        .neural-panel { padding: 24px 18px 20px; }
-        .np-heading { font-size: 0.9rem; letter-spacing: 0.28em; }
+        #login-screen { padding: 16px 12px; }
+        .nh-title { font-size: 1.1rem; letter-spacing: 0.32em; }
+        .nh-sub { font-size: 0.6rem; letter-spacing: 0.18em; }
+        .neural-header { margin-bottom: 18px; }
+        .neural-panel { padding: 22px 16px 18px; }
+        .np-heading { font-size: 0.85rem; letter-spacing: 0.24em; }
+        .np-status { font-size: 0.58rem; margin-bottom: 18px; }
+        .np-field { margin-bottom: 12px; }
+        .np-input-wrap input { height: 40px; font-size: 0.88rem; }
         .neural-side { display: none; }
-        .np-connect { letter-spacing: 0.22em; }
+        .np-connect { letter-spacing: 0.2em; height: 44px; font-size: 0.82rem; }
+        .np-connect::before, .np-connect::after { display: none; }
+        .np-register { font-size: 0.62rem; letter-spacing: 0.12em; }
+        .neural-footer { margin-top: 22px; }
+        .nf-text { font-size: 0.55rem; letter-spacing: 0.18em; }
       }
     `;
     document.head.appendChild(style);
@@ -476,20 +486,11 @@ export class LoginUI {
   }
 
   hide() {
-    // Remove também o HUD do Link Start
-    const linkContainer = document.getElementById('link-start-container');
+    // Remoção imediata — evita login sobreposto ao mundo
     if (this.container) {
-      this.container.classList.remove('visible');
-      setTimeout(() => {
-        this.container?.remove();
-        // Destrói canvas ambient se ainda existir
-        if (linkContainer) {
-          // Cancela animação se possível — remove o node
-          linkContainer.remove();
-        }
-      }, 700);
-    } else if (linkContainer) {
-      linkContainer.remove();
+      this.container.remove();
+      this.container = null;
     }
+    document.getElementById('link-start-container')?.remove();
   }
 }
