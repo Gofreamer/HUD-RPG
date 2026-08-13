@@ -40,6 +40,7 @@ async function startApp() {
 
 function playIntro() {
   document.getElementById('world-screen')?.remove();
+  document.getElementById('link-start-container')?.remove();
   document.getElementById('login-screen')?.remove();
   document.getElementById('char-creation')?.remove();
 

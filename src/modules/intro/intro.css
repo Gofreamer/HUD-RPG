@@ -1,15 +1,19 @@
 /* src/modules/intro/intro.css */
-/* Estilos da animação Link Start */
 
 #link-start-container {
   position: fixed;
   inset: 0;
-  background: #000;
-  z-index: 9999;
+  background: #020713;
+  z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+#link-start-container.ambient-mode {
+  z-index: 50;
+  pointer-events: none;
 }
 
 #link-start-canvas {
@@ -24,14 +28,15 @@
   z-index: 10;
   font-size: 2.8rem;
   font-weight: 300;
-  letter-spacing: 0.35em;
+  letter-spacing: 0.45em;
   color: #fff;
   text-transform: uppercase;
   opacity: 0;
   transform: scale(0.85);
   transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  text-shadow: 0 0 40px rgba(100, 180, 255, 0.6);
+  text-shadow: 0 0 40px rgba(100, 180, 255, 0.55);
   pointer-events: none;
+  padding-left: 0.45em;
 }
 
 .link-start-text.visible {
@@ -41,18 +46,17 @@
 
 .link-start-text.fade-out {
   opacity: 0;
-  transform: scale(1.1);
-  transition: all 0.6s ease-out;
+  transform: scale(1.08);
+  transition: all 0.7s ease-out;
 }
 
-/* Sistema de checks (OK) */
 .system-checks {
   position: absolute;
-  bottom: 18%;
+  bottom: 16%;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 2.5rem;
+  gap: 2.2rem;
   opacity: 0;
   transition: opacity 0.5s ease;
   z-index: 10;
@@ -62,19 +66,24 @@
   opacity: 1;
 }
 
+.system-checks.fade-out {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
 .check-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.15em;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   color: #8ab4f8;
   text-transform: uppercase;
 }
 
 .check-item .status {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #4ade80;
   opacity: 0;
@@ -83,4 +92,18 @@
 
 .check-item .status.ok {
   opacity: 1;
+}
+
+@media (max-width: 600px) {
+  .link-start-text {
+    font-size: 1.6rem;
+    letter-spacing: 0.28em;
+  }
+  .system-checks {
+    gap: 0.9rem;
+    bottom: 12%;
+  }
+  .check-item {
+    font-size: 0.58rem;
+  }
 }
