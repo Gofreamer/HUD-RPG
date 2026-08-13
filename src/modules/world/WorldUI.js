@@ -196,7 +196,10 @@ export class WorldUI {
     }
 
     this.setText('hud-name', p.displayName || p.account || '—');
-    this.setText('hud-level', `LV. ${level} · ${(p.class || 'Aventureiro').toUpperCase()}`);
+    {
+      const racePart = p.race ? `${String(p.race).toUpperCase()} · ` : '';
+      this.setText('hud-level', `LV. ${level} · ${racePart}${String(p.class || 'Aventureiro').toUpperCase()}`);
+    }
     this.setText('hud-name-large', p.displayName || p.account || '—');
     this.setText('hud-location-badge', p.location || 'Cidade dos Iniciantes');
     this.setText('hud-location', p.location || 'Cidade dos Iniciantes');
@@ -358,6 +361,7 @@ export class WorldUI {
           <div class="menu-section">
             <h3>Personagem</h3>
             <p><strong>Nome:</strong> ${this.escape(p.displayName)}</p>
+            ${p.race ? `<p><strong>Raça:</strong> ${this.escape(p.race)}</p>` : ''}
             <p><strong>Classe:</strong> ${this.escape(p.class || 'Aventureiro')}</p>
             <p><strong>Nível:</strong> ${p.level || 1}</p>
             <p><strong>Condição:</strong> ${CONDITION_LABELS[p.condition] || 'Normal'}</p>
