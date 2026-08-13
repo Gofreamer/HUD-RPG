@@ -772,22 +772,44 @@ export class WorldUI {
       </div>`;
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
     try {
-      const [players, guilds] = await Promise.all([
-        this.authService.getAllPlayers(),
-        this.authService.getAllGuilds()
-      ]);
-      this.renderAdminList(overlay, players, guilds);
-    } catch {
-      overlay.querySelector('.panel-body').innerHTML = `<p style="color:#fca5a5">Erro ao carregar dados.</p>`;
+      let players = [];
+      let guilds = [];
+      let guildsError = null;
+
+      try {
+        players = await this.authService.getAllPlayers();
+      } catch (err) {
+        overlay.querySelector('.panel-body').innerHTML =
+          `<p style="color:#fca5a5">Erro ao carregar jogadores: ${this.escape(err.message || String(err))}</p>
+           <p style="color:#64748b;font-size:0.8rem;margin-top:8px">Verifique as regras do Firebase em <code>players</code>.</p>`;
+        return;
+      }
+
+      try {
+        guilds = await this.authService.getAllGuilds();
+      } catch (err) {
+        guildsError = err;
+        guilds = [];
+      }
+
+      this.renderAdminList(overlay, players, guilds, guildsError);
+    } catch (err) {
+      overlay.querySelector('.panel-body').innerHTML =
+        `<p style="color:#fca5a5">Erro ao carregar dados: ${this.escape(err.message || String(err))}</p>`;
     }
   }
 
-  renderAdminList(overlay, players, guilds = []) {
+  renderAdminList(overlay, players, guilds = [], guildsError = null) {
     const body = overlay.querySelector('.panel-body');
     const pending = guilds.filter((g) => g.status === 'pending');
     const active = guilds.filter((g) => g.status === 'active');
 
     body.innerHTML = `
+      ${guildsError ? `
+      <div class="admin-section">
+        <p style="color:#fca5a5;font-size:0.85rem">Guildas indisponíveis: ${this.escape(guildsError.message || String(guildsError))}</p>
+        <p style="color:#64748b;font-size:0.78rem;margin-top:4px">Atualize as regras do Firebase para liberar o nó <code>guilds</code>.</p>
+      </div>` : ''}
       <div class="admin-section">
         <h3>Guildas pendentes (${pending.length})</h3>
         ${pending.length === 0
@@ -1023,103 +1045,197 @@ export class WorldUI {
     });
   }
 
+  /** Normaliza listas vindas do Firebase (array ou objeto indexado). */
+  toArray(val) {
+    if (Array.isArray(val)) return val.filter(Boolean).map((x) => (x && typeof x === 'object' ? { ...x } : x));
+    if (val && typeof val === 'object') {
+      return Object.values(val)
+        .filter(Boolean)
+        .map((x) => (x && typeof x === 'object' ? { ...x } : x));
+    }
+    return [];
+  }
+
+  markAdminDirty(dirty = true) {
+    this._adminDirty = dirty;
+    const flag = this.container?.querySelector('#adm-dirty-flag');
+    if (flag) flag.classList.toggle('hidden', !dirty);
+  }
+
   renderAdminEdit(player) {
     const area = this.container.querySelector('#admin-edit-area');
     if (!area || !player) return;
 
-    area.innerHTML = `
-      <div class="admin-section admin-edit-block">
-        <h3>Editando: ${this.escape(player.displayName || player.account)}</h3>
-
-        <div class="admin-form">
-          <label>Nome <input type="text" id="adm-name" value="${this.escape(player.displayName || '')}" /></label>
-          <label>Nível <input type="number" id="adm-level" value="${player.level || 1}" min="1" /></label>
-          <label>HP <input type="number" id="adm-hp" value="${player.hp || 100}" /></label>
-          <label>Max HP <input type="number" id="adm-maxhp" value="${player.maxHp || 100}" /></label>
-          <label>MP <input type="number" id="adm-mp" value="${player.mp || 50}" /></label>
-          <label>Max MP <input type="number" id="adm-maxmp" value="${player.maxMp || 50}" /></label>
-          <label>Localização <input type="text" id="adm-location" value="${this.escape(player.location || '')}" /></label>
-          <label>Região <input type="text" id="adm-region" value="${this.escape(player.region || '')}" /></label>
-          <label>Guilda <input type="text" id="adm-guild" value="${this.escape(player.guild || '')}" placeholder="Nome da guilda" /></label>
-          <label>Sigla Guilda <input type="text" id="adm-guild-tag" maxlength="5" value="${this.escape(player.guildTag || '')}" placeholder="TAG" /></label>
-          <label>Guild ID <input type="text" id="adm-guild-id" value="${this.escape(player.guildId || '')}" placeholder="id firebase" /></label>
-          <label>Cargo Guilda <input type="text" id="adm-guild-role" value="${this.escape(player.guildRole || '')}" placeholder="leader / member" /></label>
-          <label>Avatar URL <input type="text" id="adm-avatar" value="${this.escape(player.avatarUrl || '')}" placeholder="https://..." /></label>
-          <label>Zona
-            <select id="adm-zone">
-              <option value="safe" ${(player.zoneType || 'safe') === 'safe' ? 'selected' : ''}>Área Segura</option>
-              <option value="combat" ${player.zoneType === 'combat' ? 'selected' : ''}>Área de Combate</option>
-            </select>
-          </label>
-          <label>Condição
-            <select id="adm-condition">
-              <option value="normal" ${(player.condition || 'normal') === 'normal' ? 'selected' : ''}>Normal</option>
-              <option value="ferido" ${player.condition === 'ferido' ? 'selected' : ''}>Ferido</option>
-              <option value="exausto" ${player.condition === 'exausto' ? 'selected' : ''}>Exausto</option>
-              <option value="critico" ${player.condition === 'critico' ? 'selected' : ''}>Crítico</option>
-            </select>
-          </label>
-          <label>STR <input type="number" id="adm-str" value="${player.stats?.str ?? 10}" /></label>
-          <label>AGI <input type="number" id="adm-agi" value="${player.stats?.agi ?? 10}" /></label>
-          <label>VIT <input type="number" id="adm-vit" value="${player.stats?.vit ?? 10}" /></label>
-          <label>INT <input type="number" id="adm-int" value="${player.stats?.int ?? 10}" /></label>
-          <label>DEX <input type="number" id="adm-dex" value="${player.stats?.dex ?? 10}" /></label>
-          <label>LUK <input type="number" id="adm-luk" value="${player.stats?.luk ?? 10}" /></label>
-        </div>
-
-        <label class="full-label">Aparência
-          <textarea id="adm-appearance" rows="2" placeholder="Descrição visual do personagem...">${this.escape(player.appearance || '')}</textarea>
-        </label>
-
-        <div class="admin-tabs">
-          <button class="adm-tab active" data-tab="inv">Inventário</button>
-          <button class="adm-tab" data-tab="eq">Equipamento</button>
-          <button class="adm-tab" data-tab="sk">Skills</button>
-          <button class="adm-tab" data-tab="pt">Party</button>
-          <button class="adm-tab" data-tab="ti">Títulos</button>
-        </div>
-        <div id="adm-tab-content"></div>
-
-        <button class="btn-panel" id="adm-save">Salvar Alterações</button>
-        <div id="adm-msg"></div>
-      </div>`;
-
+    this._editingUid = player.uid;
     this._editState = {
-      inventory: [...(player.inventory || [])],
-      skills: [...(player.skills || [])],
-      party: [...(player.party || [])],
-      titles: [...(player.titles || [])],
+      inventory: this.toArray(player.inventory),
+      skills: this.toArray(player.skills),
+      party: this.toArray(player.party),
+      titles: this.toArray(player.titles),
       equipment: { ...(player.equipment || {}) },
       activeTitle: player.activeTitle || null
     };
+    this._adminDirty = false;
+    this._adminActiveTab = 'inv';
+
+    area.innerHTML = `
+      <div class="admin-section admin-edit-block">
+        <div class="adm-edit-header">
+          <h3>Editando: ${this.escape(player.displayName || player.account)}</h3>
+          <span id="adm-dirty-flag" class="adm-dirty hidden">alterações não salvas</span>
+        </div>
+
+        <details class="adm-details" open>
+          <summary>Dados básicos</summary>
+          <div class="admin-form">
+            <label>Nome <input type="text" id="adm-name" value="${this.escape(player.displayName || '')}" /></label>
+            <label>Nível <input type="number" id="adm-level" value="${player.level || 1}" min="1" /></label>
+            <label>HP <input type="number" id="adm-hp" value="${player.hp || 100}" /></label>
+            <label>Max HP <input type="number" id="adm-maxhp" value="${player.maxHp || 100}" /></label>
+            <label>MP <input type="number" id="adm-mp" value="${player.mp || 50}" /></label>
+            <label>Max MP <input type="number" id="adm-maxmp" value="${player.maxMp || 50}" /></label>
+            <label>Localização <input type="text" id="adm-location" value="${this.escape(player.location || '')}" /></label>
+            <label>Região <input type="text" id="adm-region" value="${this.escape(player.region || '')}" /></label>
+            <label>Zona
+              <select id="adm-zone">
+                <option value="safe" ${(player.zoneType || 'safe') === 'safe' ? 'selected' : ''}>Área Segura</option>
+                <option value="combat" ${player.zoneType === 'combat' ? 'selected' : ''}>Área de Combate</option>
+              </select>
+            </label>
+            <label>Condição
+              <select id="adm-condition">
+                <option value="normal" ${(player.condition || 'normal') === 'normal' ? 'selected' : ''}>Normal</option>
+                <option value="ferido" ${player.condition === 'ferido' ? 'selected' : ''}>Ferido</option>
+                <option value="exausto" ${player.condition === 'exausto' ? 'selected' : ''}>Exausto</option>
+                <option value="critico" ${player.condition === 'critico' ? 'selected' : ''}>Crítico</option>
+              </select>
+            </label>
+            <label>Avatar URL <input type="text" id="adm-avatar" value="${this.escape(player.avatarUrl || '')}" placeholder="https://..." /></label>
+          </div>
+        </details>
+
+        <details class="adm-details">
+          <summary>Guilda</summary>
+          <div class="admin-form">
+            <label>Nome <input type="text" id="adm-guild" value="${this.escape(player.guild || '')}" placeholder="Nome da guilda" /></label>
+            <label>Sigla <input type="text" id="adm-guild-tag" maxlength="5" value="${this.escape(player.guildTag || '')}" placeholder="TAG" /></label>
+            <label>Guild ID <input type="text" id="adm-guild-id" value="${this.escape(player.guildId || '')}" placeholder="id firebase" /></label>
+            <label>Cargo <input type="text" id="adm-guild-role" value="${this.escape(player.guildRole || '')}" placeholder="leader / member" /></label>
+          </div>
+        </details>
+
+        <details class="adm-details">
+          <summary>Atributos</summary>
+          <div class="admin-form">
+            <label>STR <input type="number" id="adm-str" value="${player.stats?.str ?? 10}" /></label>
+            <label>AGI <input type="number" id="adm-agi" value="${player.stats?.agi ?? 10}" /></label>
+            <label>VIT <input type="number" id="adm-vit" value="${player.stats?.vit ?? 10}" /></label>
+            <label>INT <input type="number" id="adm-int" value="${player.stats?.int ?? 10}" /></label>
+            <label>DEX <input type="number" id="adm-dex" value="${player.stats?.dex ?? 10}" /></label>
+            <label>LUK <input type="number" id="adm-luk" value="${player.stats?.luk ?? 10}" /></label>
+          </div>
+        </details>
+
+        <details class="adm-details">
+          <summary>Aparência</summary>
+          <label class="full-label" style="margin-top:0">
+            <textarea id="adm-appearance" rows="2" placeholder="Descrição visual do personagem...">${this.escape(player.appearance || '')}</textarea>
+          </label>
+        </details>
+
+        <div class="admin-tabs">
+          <button class="adm-tab active" data-tab="inv">Inventário (${this._editState.inventory.length})</button>
+          <button class="adm-tab" data-tab="eq">Equipamento</button>
+          <button class="adm-tab" data-tab="sk">Skills (${this._editState.skills.length})</button>
+          <button class="adm-tab" data-tab="pt">Party (${this._editState.party.length})</button>
+          <button class="adm-tab" data-tab="ti">Títulos (${this._editState.titles.length})</button>
+        </div>
+        <div id="adm-tab-content" class="adm-tab-content"></div>
+
+        <div class="adm-save-bar">
+          <button class="btn-panel" id="adm-save">Salvar Alterações</button>
+          <div id="adm-msg" class="adm-msg"></div>
+        </div>
+      </div>`;
 
     const showTab = (tab) => {
-      area.querySelectorAll('.adm-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      this._adminActiveTab = tab;
+      area.querySelectorAll('.adm-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
       const content = area.querySelector('#adm-tab-content');
       if (tab === 'inv') this.renderAdminListEditor(content, 'inventory', ['name', 'qty', 'rarity', 'description']);
       if (tab === 'sk') this.renderAdminListEditor(content, 'skills', ['name', 'type', 'description']);
       if (tab === 'pt') this.renderAdminListEditor(content, 'party', ['name', 'class', 'level', 'role']);
       if (tab === 'ti') this.renderAdminListEditor(content, 'titles', ['name', 'bonus', 'description']);
       if (tab === 'eq') this.renderAdminEquipmentEditor(content);
+      this.refreshAdminTabCounts(area);
     };
 
-    area.querySelectorAll('.adm-tab').forEach(btn => {
-      btn.onclick = () => { Sound.click(); showTab(btn.dataset.tab); };
+    area.querySelectorAll('.adm-tab').forEach((btn) => {
+      btn.onclick = () => {
+        Sound.click();
+        showTab(btn.dataset.tab);
+      };
     });
     showTab('inv');
+
+    area.querySelectorAll('input, select, textarea').forEach((el) => {
+      el.addEventListener('change', () => this.markAdminDirty(true));
+      el.addEventListener('input', () => this.markAdminDirty(true));
+    });
 
     area.querySelector('#adm-save').onclick = async () => {
       const msg = area.querySelector('#adm-msg');
       msg.textContent = 'Salvando...';
       msg.className = 'adm-msg loading';
 
+      const inventory = this.toArray(this._editState.inventory).map((it) => ({
+        name: String(it.name || '').trim(),
+        qty: Number(it.qty) || 1,
+        rarity: String(it.rarity || 'comum').toLowerCase(),
+        description: String(it.description || '').trim()
+      })).filter((it) => it.name);
+
+      const skills = this.toArray(this._editState.skills).map((it) => ({
+        name: String(it.name || '').trim(),
+        type: String(it.type || '').trim(),
+        description: String(it.description || '').trim()
+      })).filter((it) => it.name);
+
+      const party = this.toArray(this._editState.party).map((it) => ({
+        name: String(it.name || '').trim(),
+        class: String(it.class || '').trim(),
+        level: Number(it.level) || 1,
+        role: String(it.role || '').trim()
+      })).filter((it) => it.name);
+
+      const titles = this.toArray(this._editState.titles).map((it) => ({
+        name: String(it.name || '').trim(),
+        bonus: String(it.bonus || '').trim(),
+        description: String(it.description || '').trim()
+      })).filter((it) => it.name);
+
+      const equipment = {};
+      const slots = ['cabeca', 'peito', 'maos', 'pernas', 'pes', 'arma', 'acessorio1', 'acessorio2'];
+      for (const slot of slots) {
+        const item = this._editState.equipment?.[slot];
+        if (item && item.name) {
+          equipment[slot] = {
+            name: String(item.name).trim(),
+            rarity: String(item.rarity || 'comum').toLowerCase(),
+            description: String(item.description || '').trim()
+          };
+        } else {
+          equipment[slot] = null;
+        }
+      }
+
       const data = {
         displayName: area.querySelector('#adm-name').value.trim(),
-        level: Number(area.querySelector('#adm-level').value),
-        hp: Number(area.querySelector('#adm-hp').value),
-        maxHp: Number(area.querySelector('#adm-maxhp').value),
-        mp: Number(area.querySelector('#adm-mp').value),
-        maxMp: Number(area.querySelector('#adm-maxmp').value),
+        level: Number(area.querySelector('#adm-level').value) || 1,
+        hp: Number(area.querySelector('#adm-hp').value) || 0,
+        maxHp: Number(area.querySelector('#adm-maxhp').value) || 0,
+        mp: Number(area.querySelector('#adm-mp').value) || 0,
+        maxMp: Number(area.querySelector('#adm-maxmp').value) || 0,
         location: area.querySelector('#adm-location').value.trim(),
         region: area.querySelector('#adm-region').value.trim(),
         guild: area.querySelector('#adm-guild').value.trim(),
@@ -1131,64 +1247,165 @@ export class WorldUI {
         condition: area.querySelector('#adm-condition').value,
         appearance: area.querySelector('#adm-appearance').value.trim(),
         stats: {
-          str: Number(area.querySelector('#adm-str').value),
-          agi: Number(area.querySelector('#adm-agi').value),
-          vit: Number(area.querySelector('#adm-vit').value),
-          int: Number(area.querySelector('#adm-int').value),
-          dex: Number(area.querySelector('#adm-dex').value),
-          luk: Number(area.querySelector('#adm-luk').value)
+          str: Number(area.querySelector('#adm-str').value) || 0,
+          agi: Number(area.querySelector('#adm-agi').value) || 0,
+          vit: Number(area.querySelector('#adm-vit').value) || 0,
+          int: Number(area.querySelector('#adm-int').value) || 0,
+          dex: Number(area.querySelector('#adm-dex').value) || 0,
+          luk: Number(area.querySelector('#adm-luk').value) || 0
         },
-        inventory: this._editState.inventory,
-        skills: this._editState.skills,
-        party: this._editState.party,
-        titles: this._editState.titles,
-        equipment: this._editState.equipment,
-        activeTitle: this._editState.activeTitle
+        inventory,
+        skills,
+        party,
+        titles,
+        equipment,
+        activeTitle: this._editState.activeTitle || null
       };
 
       try {
         await this.authService.updatePlayer(player.uid, data);
+        this._editState.inventory = inventory;
+        this._editState.skills = skills;
+        this._editState.party = party;
+        this._editState.titles = titles;
+        this._editState.equipment = equipment;
+        this.markAdminDirty(false);
         Sound.success();
-        msg.textContent = 'Salvo com sucesso!';
+        msg.textContent = `Salvo! Inventário: ${inventory.length} item(ns).`;
         msg.className = 'adm-msg success';
+        this.refreshAdminTabCounts(area);
+        showTab(this._adminActiveTab || 'inv');
       } catch (err) {
         Sound.error();
-        msg.textContent = 'Erro: ' + (err.message || 'falha');
+        msg.textContent = 'Erro: ' + (err.message || 'falha ao salvar');
         msg.className = 'adm-msg error';
       }
     };
   }
 
+  refreshAdminTabCounts(area) {
+    if (!area || !this._editState) return;
+    const map = {
+      inv: `Inventário (${this._editState.inventory.length})`,
+      eq: 'Equipamento',
+      sk: `Skills (${this._editState.skills.length})`,
+      pt: `Party (${this._editState.party.length})`,
+      ti: `Títulos (${this._editState.titles.length})`
+    };
+    area.querySelectorAll('.adm-tab').forEach((t) => {
+      const label = map[t.dataset.tab];
+      if (label) t.textContent = label;
+    });
+  }
+
   renderAdminListEditor(container, key, fields) {
-    const list = this._editState[key] || [];
+    if (!container) return;
+    const list = this.toArray(this._editState[key]);
+    this._editState[key] = list;
+
+    const isInv = key === 'inventory';
+    const titleMap = {
+      inventory: 'Itens',
+      skills: 'Skills',
+      party: 'Membros',
+      titles: 'Títulos'
+    };
+
     container.innerHTML = `
-      <div class="adm-list">
-        ${list.map((item, idx) => `
-          <div class="adm-list-item ${item.rarity ? this.rarityClass(item.rarity) : ''}">
-            <span>${this.escape(item.name || '—')}${item.rarity ? ` · ${RARITY_LABELS[item.rarity] || item.rarity}` : ''}</span>
-            <div class="adm-list-actions">
-              <button class="btn-tiny edit-item" data-idx="${idx}">Editar</button>
-              <button class="btn-tiny danger del-item" data-idx="${idx}">✕</button>
-            </div>
-          </div>`).join('') || '<p class="adm-empty">Nenhum item ainda.</p>'}
+      <div class="adm-list-toolbar">
+        <span class="adm-list-count">${list.length} ${titleMap[key] || 'itens'}</span>
+        <button class="btn-tiny" id="adm-add-item">+ Adicionar</button>
       </div>
-      <button class="btn-panel btn-add" id="adm-add-item">+ Adicionar</button>
+
+      ${isInv ? `
+      <div class="adm-quick-add">
+        <input type="text" id="qa-name" placeholder="Nome do item" />
+        <input type="number" id="qa-qty" value="1" min="1" title="Qtd" />
+        <select id="qa-rarity">
+          <option value="comum">Comum</option>
+          <option value="raro">Raro</option>
+          <option value="unico">Único</option>
+        </select>
+        <button class="btn-tiny" id="qa-add">Dar item</button>
+      </div>
+      <input type="text" id="qa-desc" class="adm-quick-desc" placeholder="Descrição (opcional)" />
+      ` : ''}
+
+      <div class="adm-list">
+        ${list.length === 0
+          ? '<p class="adm-empty">Lista vazia. Use “Adicionar” ou o atalho acima.</p>'
+          : list.map((item, idx) => {
+              const rarity = item.rarity ? (RARITY_LABELS[item.rarity] || item.rarity) : '';
+              const meta = [];
+              if (isInv && item.qty != null) meta.push(`x${item.qty}`);
+              if (item.type) meta.push(item.type);
+              if (item.class) meta.push(item.class);
+              if (item.level != null && key === 'party') meta.push(`Lv.${item.level}`);
+              if (item.role) meta.push(item.role);
+              if (item.bonus) meta.push(item.bonus);
+              return `
+                <div class="adm-list-item ${item.rarity ? this.rarityClass(item.rarity) : ''}">
+                  <div class="adm-item-main">
+                    <div class="adm-item-title">
+                      <strong>${this.escape(item.name || '—')}</strong>
+                      ${rarity ? `<span class="rarity-tag">${this.escape(rarity)}</span>` : ''}
+                    </div>
+                    <div class="adm-item-meta">${this.escape(meta.join(' · '))}</div>
+                    ${item.description ? `<div class="adm-item-desc">${this.escape(item.description)}</div>` : ''}
+                  </div>
+                  <div class="adm-list-actions">
+                    <button class="btn-tiny edit-item" data-idx="${idx}">Editar</button>
+                    <button class="btn-tiny danger del-item" data-idx="${idx}">✕</button>
+                  </div>
+                </div>`;
+            }).join('')}
+      </div>
     `;
 
-    container.querySelectorAll('.edit-item').forEach(btn => {
-      btn.onclick = () => { Sound.click(); this.openItemModal(key, fields, Number(btn.dataset.idx)); };
+    container.querySelectorAll('.edit-item').forEach((btn) => {
+      btn.onclick = () => {
+        Sound.click();
+        this.openItemModal(key, fields, Number(btn.dataset.idx));
+      };
     });
-    container.querySelectorAll('.del-item').forEach(btn => {
+    container.querySelectorAll('.del-item').forEach((btn) => {
       btn.onclick = () => {
         Sound.click();
         this._editState[key].splice(Number(btn.dataset.idx), 1);
+        this.markAdminDirty(true);
         this.renderAdminListEditor(container, key, fields);
+        this.refreshAdminTabCounts(this.container.querySelector('.admin-edit-block'));
       };
     });
     container.querySelector('#adm-add-item').onclick = () => {
       Sound.click();
       this.openItemModal(key, fields, -1);
     };
+
+    if (isInv) {
+      const quickAdd = () => {
+        const name = container.querySelector('#qa-name')?.value.trim();
+        if (!name) {
+          container.querySelector('#qa-name')?.focus();
+          return;
+        }
+        const qty = Number(container.querySelector('#qa-qty')?.value) || 1;
+        const rarity = container.querySelector('#qa-rarity')?.value || 'comum';
+        const description = container.querySelector('#qa-desc')?.value.trim() || '';
+        this._editState.inventory.push({ name, qty, rarity, description });
+        this.markAdminDirty(true);
+        Sound.success();
+        this.renderAdminListEditor(container, key, fields);
+        this.refreshAdminTabCounts(this.container.querySelector('.admin-edit-block'));
+      };
+      container.querySelector('#qa-add').onclick = quickAdd;
+      container.querySelector('#qa-name')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          quickAdd();
+        }
+      });
+    }
   }
 
   renderAdminEquipmentEditor(container) {
@@ -1199,18 +1416,40 @@ export class WorldUI {
       { key: 'acessorio1', label: 'Acessório 1' }, { key: 'acessorio2', label: 'Acessório 2' }
     ];
     const eq = this._editState.equipment || {};
-    container.innerHTML = slots.map(s => {
-      const item = eq[s.key];
-      return `
-        <div class="adm-list-item">
-          <span><strong>${s.label}:</strong> ${item ? this.escape(item.name) : '— vazio —'}</span>
-          <button class="btn-tiny edit-eq" data-slot="${s.key}">${item ? 'Editar' : 'Definir'}</button>
-        </div>`;
-    }).join('');
-    container.querySelectorAll('.edit-eq').forEach(btn => {
+    container.innerHTML = `
+      <div class="adm-list">
+        ${slots.map((s) => {
+          const item = eq[s.key];
+          return `
+            <div class="adm-list-item ${item?.rarity ? this.rarityClass(item.rarity) : ''}">
+              <div class="adm-item-main">
+                <div class="adm-item-title">
+                  <span class="adm-slot-label">${s.label}</span>
+                  <strong>${item ? this.escape(item.name) : '— vazio —'}</strong>
+                  ${item?.rarity ? `<span class="rarity-tag">${this.escape(RARITY_LABELS[item.rarity] || item.rarity)}</span>` : ''}
+                </div>
+                ${item?.description ? `<div class="adm-item-desc">${this.escape(item.description)}</div>` : ''}
+              </div>
+              <div class="adm-list-actions">
+                <button class="btn-tiny edit-eq" data-slot="${s.key}">${item ? 'Editar' : 'Definir'}</button>
+                ${item ? `<button class="btn-tiny danger clear-eq" data-slot="${s.key}">✕</button>` : ''}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+
+    container.querySelectorAll('.edit-eq').forEach((btn) => {
       btn.onclick = () => {
         Sound.click();
         this.openItemModal('equipment', ['name', 'rarity', 'description'], btn.dataset.slot);
+      };
+    });
+    container.querySelectorAll('.clear-eq').forEach((btn) => {
+      btn.onclick = () => {
+        Sound.click();
+        this._editState.equipment[btn.dataset.slot] = null;
+        this.markAdminDirty(true);
+        this.renderAdminEquipmentEditor(container);
       };
     });
   }
@@ -1251,7 +1490,7 @@ export class WorldUI {
           <button class="btn-close" id="modal-x">✕</button>
         </div>
         <div class="modal-body">
-          ${fields.map(f => {
+          ${fields.map((f) => {
             if (f === 'rarity') {
               const val = (current.rarity || 'comum').toLowerCase();
               return `
@@ -1283,31 +1522,43 @@ export class WorldUI {
         </div>
         <div class="modal-footer">
           <button class="btn-modal-cancel" id="modal-cancel">Cancelar</button>
-          <button class="btn-modal-save" id="modal-save">Salvar</button>
+          <button class="btn-modal-save" id="modal-save">Confirmar</button>
         </div>
       </div>`;
 
-    const close = () => { modal.classList.add('hidden'); modal.innerHTML = ''; };
+    const close = () => {
+      modal.classList.add('hidden');
+      modal.innerHTML = '';
+    };
     modal.querySelector('#modal-cancel').onclick = close;
     modal.querySelector('#modal-x').onclick = close;
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
 
     modal.querySelector('#modal-save').onclick = () => {
       const obj = {};
-      fields.forEach(f => {
+      fields.forEach((f) => {
         const el = modal.querySelector(`#modal-${f}`);
         if (!el) return;
-        obj[f] = (f === 'qty' || f === 'level') ? Number(el.value) || 0 : el.value.trim();
+        obj[f] = f === 'qty' || f === 'level' ? Number(el.value) || 0 : el.value.trim();
       });
+
+      if (!obj.name) {
+        modal.querySelector('#modal-name')?.focus();
+        return;
+      }
 
       if (isEquip) {
         this._editState.equipment = this._editState.equipment || {};
-        this._editState.equipment[indexOrSlot] = obj.name ? obj : null;
-      } else if (isNew) {
-        this._editState[key].push(obj);
+        this._editState.equipment[indexOrSlot] = obj;
       } else {
-        this._editState[key][indexOrSlot] = obj;
+        if (!Array.isArray(this._editState[key])) this._editState[key] = [];
+        if (isNew) this._editState[key].push(obj);
+        else this._editState[key][indexOrSlot] = obj;
       }
 
+      this.markAdminDirty(true);
       Sound.success();
       close();
 
@@ -1318,7 +1569,10 @@ export class WorldUI {
       if (key === 'party') this.renderAdminListEditor(content, 'party', ['name', 'class', 'level', 'role']);
       if (key === 'titles') this.renderAdminListEditor(content, 'titles', ['name', 'bonus', 'description']);
       if (key === 'equipment') this.renderAdminEquipmentEditor(content);
+      this.refreshAdminTabCounts(this.container.querySelector('.admin-edit-block'));
     };
+
+    setTimeout(() => modal.querySelector('#modal-name')?.focus(), 30);
   }
 
   escape(str) {
