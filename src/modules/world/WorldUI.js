@@ -42,6 +42,19 @@ export class WorldUI {
     this.container = document.createElement('div');
     this.container.id = 'world-screen';
     this.container.innerHTML = `
+      <div class="world-bg" aria-hidden="true">
+        <video
+          class="world-bg-video"
+          src="/assets/world/cidade-iniciantes.mp4"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="auto"
+        ></video>
+        <div class="world-bg-overlay"></div>
+      </div>
+
       <div class="hud-top">
         <div class="char-panel" id="char-panel">
           <div class="cp-corner tl"></div>
@@ -134,8 +147,33 @@ export class WorldUI {
       <div id="item-modal" class="item-modal hidden"></div>
     `;
     document.body.appendChild(this.container);
+    this.setupWorldBackground();
     this.updateHUD();
     this.startWelcomeSequence();
+  }
+
+  setupWorldBackground() {
+    const video = this.container.querySelector('.world-bg-video');
+    if (!video) return;
+
+    const markReady = () => {
+      video.classList.add('is-ready');
+    };
+
+    if (video.readyState >= 2) {
+      markReady();
+    } else {
+      video.addEventListener('loadeddata', markReady, { once: true });
+      video.addEventListener('canplay', markReady, { once: true });
+    }
+
+    // Garante autoplay em navegadores mais restritivos
+    const tryPlay = () => {
+      const p = video.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    };
+    tryPlay();
+    video.addEventListener('canplay', tryPlay, { once: true });
   }
 
   updateHUD() {

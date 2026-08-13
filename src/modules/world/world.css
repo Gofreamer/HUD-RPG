@@ -11,10 +11,44 @@
   opacity: 0;
   transition: opacity 0.7s ease;
   z-index: 50;
+  --world-background-darkness: 0.30;
 }
 
 #world-screen.visible {
   opacity: 1;
+}
+
+/* ========== WORLD BACKGROUND VIDEO ========== */
+.world-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.world-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.world-bg-video.is-ready {
+  opacity: 1;
+}
+
+.world-bg-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgba(2, 7, 18, var(--world-background-darkness));
 }
 
 /* ========== TOP BAR ========== */
