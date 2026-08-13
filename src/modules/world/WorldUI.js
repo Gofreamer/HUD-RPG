@@ -228,9 +228,11 @@ export class WorldUI {
 
     const guildEl = this.container.querySelector('#hud-guild');
     if (guildEl) {
-      if (p.guild) {
+      if (p.guild || p.guildTag) {
         guildEl.style.display = 'block';
-        guildEl.textContent = `「 ${p.guild} 」`;
+        const tag = p.guildTag ? `[${p.guildTag}]` : '';
+        const name = p.guild || '';
+        guildEl.textContent = tag && name ? `「 ${tag} ${name} 」` : `「 ${tag || name} 」`;
       } else {
         guildEl.style.display = 'none';
       }
@@ -347,13 +349,220 @@ export class WorldUI {
       party: () => this.renderParty(overlay),
       equipment: () => this.renderEquipment(overlay),
       titles: () => this.renderTitles(overlay),
+      guild: () => this.renderGuild(overlay),
       admin: () => this.renderAdmin(overlay)
     };
     map[this.currentPanel]?.();
   }
 
+  async renderGuild(overlay) {
+    const p = this.player;
+    overlay.innerHTML = `
+      <div class="side-panel">
+        <div class="panel-header"><h2>Guilda</h2><button class="btn-close" id="close-p">✕</button></div>
+        <div class="panel-body" id="guild-panel-body">
+          <p style="color:#94a3b8;font-size:0.85rem">Carregando...</p>
+        </div>
+      </div>`;
+    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    const body = overlay.querySelector('#guild-panel-body');
+
+    try {
+      if (p.guildId) {
+        const guild = await this.authService.getGuild(p.guildId);
+        this.renderGuildMemberView(body, guild, p);
+      } else {
+        await this.renderGuildBrowseView(body, p);
+      }
+    } catch (err) {
+      body.innerHTML = `<p style="color:#fca5a5">${this.escape(err.message || 'Erro ao carregar guildas.')}</p>`;
+    }
+  }
+
+  renderGuildMemberView(body, guild, p) {
+    if (!guild) {
+      body.innerHTML = `
+        <div class="menu-section">
+          <p style="color:#fca5a5">Guilda não encontrada nos registros.</p>
+          <button class="btn-panel" id="guild-clear-local">Limpar vínculo local</button>
+        </div>`;
+      body.querySelector('#guild-clear-local').onclick = async () => {
+        try {
+          await this.authService.updatePlayer(this.uid, {
+            guild: '', guildId: '', guildTag: '', guildRole: ''
+          });
+          Sound.success();
+          this.renderGuild(this.container.querySelector('#panel-overlay'));
+        } catch (e) {
+          Sound.error();
+        }
+      };
+      return;
+    }
+
+    const members = Array.isArray(guild.members) ? guild.members : [];
+    const statusLabel =
+      guild.status === 'active' ? 'Ativa' :
+      guild.status === 'pending' ? 'Aguardando aprovação' :
+      guild.status === 'rejected' ? 'Recusada' : guild.status;
+
+    body.innerHTML = `
+      <div class="menu-section">
+        <h3>${this.escape(guild.name)} <span style="opacity:0.7">[${this.escape(guild.tag || '')}]</span></h3>
+        <p><strong>Status:</strong> ${this.escape(statusLabel)}</p>
+        <p><strong>Líder:</strong> ${this.escape(guild.leaderName || '—')}</p>
+        <p><strong>Seu cargo:</strong> ${this.escape(p.guildRole || 'member')}</p>
+        ${guild.description ? `<p style="margin-top:8px;line-height:1.45;color:#94a3b8">${this.escape(guild.description)}</p>` : ''}
+      </div>
+      <div class="menu-section">
+        <h3>Membros (${members.length})</h3>
+        <div class="guild-member-list">
+          ${members.map((m) => `
+            <div class="guild-member-row">
+              <span>${this.escape(m.name || '—')}${m.fictional ? ' <em style="opacity:0.55">(fictício)</em>' : ''}</span>
+              <span class="guild-role-tag">${this.escape(m.role || 'member')}</span>
+            </div>`).join('') || '<p class="adm-empty">Nenhum membro.</p>'}
+        </div>
+      </div>
+      <div class="menu-section">
+        <button class="btn-panel danger-outline" id="guild-leave">Sair da Guilda</button>
+        <div id="guild-msg" class="creation-error" style="margin-top:8px"></div>
+      </div>
+      <button class="btn-panel" id="guild-back-menu" style="margin-top:8px">← Voltar ao Menu</button>
+    `;
+
+    body.querySelector('#guild-back-menu').onclick = () => {
+      Sound.click();
+      this.openPanel('menu');
+    };
+    body.querySelector('#guild-leave').onclick = async () => {
+      const msg = body.querySelector('#guild-msg');
+      msg.textContent = 'Saindo...';
+      try {
+        await this.authService.leaveGuild(this.uid, this.player);
+        Sound.success();
+        this.renderGuild(this.container.querySelector('#panel-overlay'));
+      } catch (err) {
+        Sound.error();
+        msg.textContent = err.message || 'Não foi possível sair.';
+      }
+    };
+  }
+
+  async renderGuildBrowseView(body, p) {
+    const active = await this.authService.getActiveGuilds();
+    const all = await this.authService.getAllGuilds();
+    const myPending = all.find(
+      (g) => g.status === 'pending' && Array.isArray(g.members) && g.members.some((m) => m.uid === this.uid)
+    );
+    const myRequests = all.filter(
+      (g) => Array.isArray(g.joinRequests) && g.joinRequests.some((r) => r.uid === this.uid)
+    );
+
+    body.innerHTML = `
+      <div class="menu-section">
+        <h3>Criar Guilda</h3>
+        <p style="font-size:0.8rem;color:#64748b;margin-bottom:10px">
+          A criação fica pendente até um Admin aprovar.
+        </p>
+        <div class="guild-form">
+          <label>Nome <input type="text" id="gf-name" maxlength="24" placeholder="Nome da guilda" /></label>
+          <label>Sigla <input type="text" id="gf-tag" maxlength="5" placeholder="Ex: KRT" /></label>
+          <label>Descrição <textarea id="gf-desc" rows="2" maxlength="200" placeholder="Breve descrição..."></textarea></label>
+          <button class="btn-panel" id="gf-create">Solicitar criação</button>
+          <div id="gf-msg" class="creation-error" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      ${myPending ? `
+      <div class="menu-section">
+        <h3>Sua solicitação</h3>
+        <p><strong>${this.escape(myPending.name)}</strong> [${this.escape(myPending.tag || '')}] — aguardando aprovação.</p>
+      </div>` : ''}
+
+      ${myRequests.length ? `
+      <div class="menu-section">
+        <h3>Pedidos enviados</h3>
+        ${myRequests.map((g) => `
+          <div class="guild-member-row">
+            <span>${this.escape(g.name)} [${this.escape(g.tag || '')}]</span>
+            <button class="btn-tiny" data-cancel-join="${g.id}">Cancelar</button>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <div class="menu-section">
+        <h3>Guildas ativas (${active.length})</h3>
+        ${active.length === 0
+          ? '<p class="adm-empty">Nenhuma guilda ativa no momento.</p>'
+          : active.map((g) => `
+            <div class="guild-browse-card">
+              <div>
+                <strong>${this.escape(g.name)}</strong>
+                <span style="opacity:0.65"> [${this.escape(g.tag || '')}]</span>
+                <div style="font-size:0.75rem;color:#64748b;margin-top:2px">
+                  Líder: ${this.escape(g.leaderName || '—')} · ${(Array.isArray(g.members) ? g.members.length : 0)} membros
+                </div>
+              </div>
+              <button class="btn-tiny" data-join="${g.id}">Entrar</button>
+            </div>`).join('')}
+      </div>
+      <button class="btn-panel" id="guild-back-menu">← Voltar ao Menu</button>
+    `;
+
+    body.querySelector('#guild-back-menu').onclick = () => {
+      Sound.click();
+      this.openPanel('menu');
+    };
+
+    body.querySelector('#gf-create').onclick = async () => {
+      const msg = body.querySelector('#gf-msg');
+      msg.textContent = 'Enviando...';
+      try {
+        await this.authService.createGuild(this.uid, this.player, {
+          name: body.querySelector('#gf-name').value,
+          tag: body.querySelector('#gf-tag').value,
+          description: body.querySelector('#gf-desc').value
+        });
+        Sound.success();
+        this.renderGuild(this.container.querySelector('#panel-overlay'));
+      } catch (err) {
+        Sound.error();
+        msg.textContent = err.message || 'Falha ao criar.';
+      }
+    };
+
+    body.querySelectorAll('[data-join]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.requestJoinGuild(this.uid, this.player, btn.dataset.join);
+          Sound.success();
+          this.renderGuild(this.container.querySelector('#panel-overlay'));
+        } catch (err) {
+          Sound.error();
+          alert(err.message || 'Não foi possível solicitar entrada.');
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-cancel-join]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.cancelJoinRequest(this.uid, btn.dataset.cancelJoin);
+          Sound.click();
+          this.renderGuild(this.container.querySelector('#panel-overlay'));
+        } catch {
+          Sound.error();
+        }
+      };
+    });
+  }
+
   renderMenu(overlay) {
     const p = this.player;
+    const guildLine = (p.guild || p.guildTag)
+      ? `<p><strong>Guilda:</strong> ${p.guildTag ? `[${this.escape(p.guildTag)}] ` : ''}${this.escape(p.guild || '')}${p.guildRole ? ` · ${this.escape(p.guildRole)}` : ''}</p>`
+      : '<p><strong>Guilda:</strong> —</p>';
+
     overlay.innerHTML = `
       <div class="side-panel">
         <div class="panel-header"><h2>Menu</h2><button class="btn-close" id="close-p">✕</button></div>
@@ -366,7 +575,7 @@ export class WorldUI {
             <p><strong>Nível:</strong> ${p.level || 1}</p>
             <p><strong>Condição:</strong> ${CONDITION_LABELS[p.condition] || 'Normal'}</p>
             <p><strong>Zona:</strong> ${(p.zoneType === 'combat') ? 'Área de Combate' : 'Área Segura'}</p>
-            ${p.guild ? `<p><strong>Guilda:</strong> ${this.escape(p.guild)}</p>` : ''}
+            ${guildLine}
             ${p.activeTitle ? `<p><strong>Título:</strong> ${this.escape(p.activeTitle)}</p>` : ''}
           </div>
           <div class="menu-section">
@@ -382,12 +591,20 @@ export class WorldUI {
           </div>
           ${p.appearance ? `<div class="menu-section"><h3>Aparência</h3><p style="line-height:1.45">${this.escape(p.appearance)}</p></div>` : ''}
           <div class="menu-section">
+            <h3>Guilda</h3>
+            <button class="btn-panel" id="menu-guild">Gerenciar Guilda</button>
+          </div>
+          <div class="menu-section">
             <button class="btn-panel" id="menu-logout">Sair do Jogo</button>
           </div>
         </div>
       </div>`;
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
     overlay.querySelector('#menu-logout').onclick = () => this.handleLogout();
+    overlay.querySelector('#menu-guild').onclick = () => {
+      Sound.click();
+      this.openPanel('guild');
+    };
   }
 
   rarityClass(r) {
@@ -555,16 +772,52 @@ export class WorldUI {
       </div>`;
     overlay.querySelector('#close-p').onclick = () => this.closePanel();
     try {
-      const players = await this.authService.getAllPlayers();
-      this.renderAdminList(overlay, players);
+      const [players, guilds] = await Promise.all([
+        this.authService.getAllPlayers(),
+        this.authService.getAllGuilds()
+      ]);
+      this.renderAdminList(overlay, players, guilds);
     } catch {
-      overlay.querySelector('.panel-body').innerHTML = `<p style="color:#fca5a5">Erro ao carregar jogadores.</p>`;
+      overlay.querySelector('.panel-body').innerHTML = `<p style="color:#fca5a5">Erro ao carregar dados.</p>`;
     }
   }
 
-  renderAdminList(overlay, players) {
+  renderAdminList(overlay, players, guilds = []) {
     const body = overlay.querySelector('.panel-body');
+    const pending = guilds.filter((g) => g.status === 'pending');
+    const active = guilds.filter((g) => g.status === 'active');
+
     body.innerHTML = `
+      <div class="admin-section">
+        <h3>Guildas pendentes (${pending.length})</h3>
+        ${pending.length === 0
+          ? '<p class="adm-empty">Nenhuma solicitação pendente.</p>'
+          : pending.map((g) => `
+            <div class="admin-player">
+              <div>
+                <strong>${this.escape(g.name)}</strong>
+                <span style="opacity:0.6;font-size:0.8rem"> [${this.escape(g.tag || '')}] · ${this.escape(g.leaderName || '')}</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn-tiny" data-approve-guild="${g.id}">Aprovar</button>
+                <button class="btn-tiny danger" data-reject-guild="${g.id}">Recusar</button>
+                <button class="btn-tiny" data-edit-guild="${g.id}">Editar</button>
+              </div>
+            </div>`).join('')}
+      </div>
+      <div class="admin-section">
+        <h3>Guildas ativas (${active.length})</h3>
+        ${active.length === 0
+          ? '<p class="adm-empty">Nenhuma guilda ativa.</p>'
+          : active.map((g) => `
+            <div class="admin-player">
+              <div>
+                <strong>${this.escape(g.name)}</strong>
+                <span style="opacity:0.6;font-size:0.8rem"> [${this.escape(g.tag || '')}] · ${(Array.isArray(g.members) ? g.members.length : 0)} membros</span>
+              </div>
+              <button class="btn-tiny" data-edit-guild="${g.id}">Editar</button>
+            </div>`).join('')}
+      </div>
       <div class="admin-section">
         <h3>Jogadores (${players.length})</h3>
         <div class="admin-player-list">
@@ -572,17 +825,200 @@ export class WorldUI {
             <div class="admin-player">
               <div>
                 <strong>${this.escape(p.displayName || p.account)}</strong>
-                <span style="opacity:0.6;font-size:0.8rem"> · Lv.${p.level || 1}</span>
+                <span style="opacity:0.6;font-size:0.8rem"> · Lv.${p.level || 1}${p.guildTag ? ` · [${this.escape(p.guildTag)}]` : ''}</span>
               </div>
               <button class="btn-tiny edit-player" data-uid="${p.uid}">Editar</button>
             </div>`).join('')}
         </div>
       </div>
       <div id="admin-edit-area"></div>`;
+
     body.querySelectorAll('.edit-player').forEach(btn => {
       btn.onclick = () => {
         Sound.click();
         this.renderAdminEdit(players.find(p => p.uid === btn.dataset.uid));
+      };
+    });
+
+    body.querySelectorAll('[data-approve-guild]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.approveGuild(btn.dataset.approveGuild, this.uid);
+          Sound.success();
+          this.renderAdmin(overlay);
+        } catch (err) {
+          Sound.error();
+          alert(err.message || 'Erro ao aprovar');
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-reject-guild]').forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm('Recusar e limpar vínculos desta guilda?')) return;
+        try {
+          await this.authService.rejectGuild(btn.dataset.rejectGuild);
+          Sound.success();
+          this.renderAdmin(overlay);
+        } catch (err) {
+          Sound.error();
+          alert(err.message || 'Erro ao recusar');
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-edit-guild]').forEach((btn) => {
+      btn.onclick = async () => {
+        Sound.click();
+        const guild = guilds.find((g) => g.id === btn.dataset.editGuild)
+          || await this.authService.getGuild(btn.dataset.editGuild);
+        this.renderAdminGuildEdit(guild, overlay);
+      };
+    });
+  }
+
+  renderAdminGuildEdit(guild, overlay) {
+    const area = this.container.querySelector('#admin-edit-area');
+    if (!area || !guild) return;
+
+    const members = Array.isArray(guild.members) ? guild.members : [];
+    const requests = Array.isArray(guild.joinRequests) ? guild.joinRequests : [];
+
+    area.innerHTML = `
+      <div class="admin-section admin-edit-block">
+        <h3>Guilda: ${this.escape(guild.name)}</h3>
+        <div class="admin-form">
+          <label>Nome <input type="text" id="ag-name" value="${this.escape(guild.name || '')}" /></label>
+          <label>Sigla <input type="text" id="ag-tag" maxlength="5" value="${this.escape(guild.tag || '')}" /></label>
+          <label>Status
+            <select id="ag-status">
+              <option value="pending" ${guild.status === 'pending' ? 'selected' : ''}>Pendente</option>
+              <option value="active" ${guild.status === 'active' ? 'selected' : ''}>Ativa</option>
+              <option value="rejected" ${guild.status === 'rejected' ? 'selected' : ''}>Recusada</option>
+            </select>
+          </label>
+        </div>
+        <label class="full-label">Descrição
+          <textarea id="ag-desc" rows="2">${this.escape(guild.description || '')}</textarea>
+        </label>
+
+        <h3 style="margin-top:14px">Membros</h3>
+        <div class="adm-list" id="ag-members">
+          ${members.map((m, idx) => `
+            <div class="adm-list-item">
+              <span>${this.escape(m.name)} · ${this.escape(m.role || 'member')}${m.fictional ? ' · fictício' : ''}</span>
+              <button class="btn-tiny danger" data-rm-member="${this.escape(m.uid)}">✕</button>
+            </div>`).join('') || '<p class="adm-empty">Sem membros.</p>'}
+        </div>
+
+        <div class="guild-form" style="margin-top:10px">
+          <h3>Adicionar membro fictício</h3>
+          <label>Nome <input type="text" id="ag-fic-name" placeholder="Nome do NPC/membro" /></label>
+          <label>Cargo
+            <select id="ag-fic-role">
+              <option value="member">member</option>
+              <option value="officer">officer</option>
+              <option value="leader">leader</option>
+            </select>
+          </label>
+          <button class="btn-panel btn-add" id="ag-add-fic">+ Adicionar fictício</button>
+        </div>
+
+        ${requests.length ? `
+        <h3 style="margin-top:14px">Pedidos de entrada</h3>
+        <div class="adm-list">
+          ${requests.map((r) => `
+            <div class="adm-list-item">
+              <span>${this.escape(r.name)}</span>
+              <div class="adm-list-actions">
+                <button class="btn-tiny" data-accept-req="${r.uid}">Aceitar</button>
+                <button class="btn-tiny danger" data-deny-req="${r.uid}">Recusar</button>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+
+        <button class="btn-panel" id="ag-save" style="margin-top:14px">Salvar Guilda</button>
+        <div id="ag-msg"></div>
+      </div>`;
+
+    area.querySelector('#ag-save').onclick = async () => {
+      const msg = area.querySelector('#ag-msg');
+      msg.textContent = 'Salvando...';
+      msg.className = 'adm-msg loading';
+      try {
+        await this.authService.updateGuild(guild.id, {
+          name: area.querySelector('#ag-name').value.trim(),
+          tag: area.querySelector('#ag-tag').value.trim(),
+          description: area.querySelector('#ag-desc').value.trim(),
+          status: area.querySelector('#ag-status').value
+        });
+        Sound.success();
+        msg.textContent = 'Guilda salva!';
+        msg.className = 'adm-msg success';
+        this.renderAdmin(overlay);
+      } catch (err) {
+        Sound.error();
+        msg.textContent = err.message || 'Erro';
+        msg.className = 'adm-msg error';
+      }
+    };
+
+    area.querySelector('#ag-add-fic').onclick = async () => {
+      const name = area.querySelector('#ag-fic-name').value.trim();
+      if (!name) return;
+      try {
+        await this.authService.addGuildMember(guild.id, {
+          name,
+          role: area.querySelector('#ag-fic-role').value,
+          fictional: true
+        });
+        Sound.success();
+        const updated = await this.authService.getGuild(guild.id);
+        this.renderAdminGuildEdit(updated, overlay);
+      } catch (err) {
+        Sound.error();
+        alert(err.message || 'Erro ao adicionar');
+      }
+    };
+
+    area.querySelectorAll('[data-rm-member]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.removeGuildMember(guild.id, btn.dataset.rmMember);
+          Sound.click();
+          const updated = await this.authService.getGuild(guild.id);
+          this.renderAdminGuildEdit(updated, overlay);
+        } catch (err) {
+          Sound.error();
+          alert(err.message || 'Erro');
+        }
+      };
+    });
+
+    area.querySelectorAll('[data-accept-req]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.acceptJoinRequest(guild.id, btn.dataset.acceptReq);
+          Sound.success();
+          const updated = await this.authService.getGuild(guild.id);
+          this.renderAdminGuildEdit(updated, overlay);
+        } catch (err) {
+          Sound.error();
+          alert(err.message || 'Erro');
+        }
+      };
+    });
+
+    area.querySelectorAll('[data-deny-req]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await this.authService.denyJoinRequest(guild.id, btn.dataset.denyReq);
+          Sound.click();
+          const updated = await this.authService.getGuild(guild.id);
+          this.renderAdminGuildEdit(updated, overlay);
+        } catch {
+          Sound.error();
+        }
       };
     });
   }
@@ -605,6 +1041,9 @@ export class WorldUI {
           <label>Localização <input type="text" id="adm-location" value="${this.escape(player.location || '')}" /></label>
           <label>Região <input type="text" id="adm-region" value="${this.escape(player.region || '')}" /></label>
           <label>Guilda <input type="text" id="adm-guild" value="${this.escape(player.guild || '')}" placeholder="Nome da guilda" /></label>
+          <label>Sigla Guilda <input type="text" id="adm-guild-tag" maxlength="5" value="${this.escape(player.guildTag || '')}" placeholder="TAG" /></label>
+          <label>Guild ID <input type="text" id="adm-guild-id" value="${this.escape(player.guildId || '')}" placeholder="id firebase" /></label>
+          <label>Cargo Guilda <input type="text" id="adm-guild-role" value="${this.escape(player.guildRole || '')}" placeholder="leader / member" /></label>
           <label>Avatar URL <input type="text" id="adm-avatar" value="${this.escape(player.avatarUrl || '')}" placeholder="https://..." /></label>
           <label>Zona
             <select id="adm-zone">
@@ -684,6 +1123,9 @@ export class WorldUI {
         location: area.querySelector('#adm-location').value.trim(),
         region: area.querySelector('#adm-region').value.trim(),
         guild: area.querySelector('#adm-guild').value.trim(),
+        guildTag: area.querySelector('#adm-guild-tag').value.trim().toUpperCase(),
+        guildId: area.querySelector('#adm-guild-id').value.trim(),
+        guildRole: area.querySelector('#adm-guild-role').value.trim(),
         avatarUrl: area.querySelector('#adm-avatar').value.trim(),
         zoneType: area.querySelector('#adm-zone').value,
         condition: area.querySelector('#adm-condition').value,
