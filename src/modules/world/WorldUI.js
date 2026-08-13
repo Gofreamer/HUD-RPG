@@ -43,59 +43,91 @@ export class WorldUI {
     this.container.id = 'world-screen';
     this.container.innerHTML = `
       <div class="hud-top">
-        <div class="player-info">
-          <div class="player-avatar" id="hud-avatar">?</div>
-          <div class="player-details">
-            <div class="player-name" id="hud-name">—</div>
-            <div class="player-level" id="hud-level">Lv. 1</div>
-            <div class="player-meta">
-              <span class="condition-badge" id="hud-condition">Normal</span>
-              <span class="zone-badge" id="hud-zone">Área Segura</span>
-            </div>
-          </div>
-          <div class="bars-block">
-            <div class="hp-block">
-              <div class="hp-label">HP</div>
-              <div class="hp-bar-container">
-                <div class="hp-bar-fill" id="hud-hp-fill" style="width:100%"></div>
-                <div class="hp-text" id="hud-hp-text">100 / 100</div>
+        <div class="char-panel" id="char-panel">
+          <div class="cp-corner tl"></div>
+          <div class="cp-corner tr"></div>
+          <div class="cp-corner bl"></div>
+          <div class="cp-corner br"></div>
+          <div class="cp-main">
+            <div class="cp-avatar" id="hud-avatar">?</div>
+            <div class="cp-info">
+              <div class="cp-name" id="hud-name">—</div>
+              <div class="cp-class" id="hud-level">LV. 01 · —</div>
+              <div class="cp-bars">
+                <div class="cp-bar-row">
+                  <span class="cp-bar-label">HP</span>
+                  <div class="cp-bar-track"><div class="cp-bar-fill hp" id="hud-hp-fill" style="width:100%"></div></div>
+                  <span class="cp-bar-val" id="hud-hp-text">100 / 100</span>
+                </div>
+                <div class="cp-bar-row">
+                  <span class="cp-bar-label">MP</span>
+                  <div class="cp-bar-track"><div class="cp-bar-fill mp" id="hud-mp-fill" style="width:100%"></div></div>
+                  <span class="cp-bar-val" id="hud-mp-text">50 / 50</span>
+                </div>
+              </div>
+              <div class="cp-badges">
+                <span class="condition-badge" id="hud-condition">Normal</span>
+                <span class="zone-badge" id="hud-zone">Área Segura</span>
               </div>
             </div>
-            <div class="hp-block" style="margin-top:4px">
-              <div class="hp-label">MP</div>
-              <div class="hp-bar-container">
-                <div class="hp-bar-fill" id="hud-mp-fill" style="width:100%;background:linear-gradient(90deg,#1d4ed8,#60a5fa)"></div>
-                <div class="hp-text" id="hud-mp-text">50 / 50</div>
-              </div>
-            </div>
           </div>
+          <div class="cp-divider"></div>
+          <div class="cp-attrs-title">Atributos</div>
+          <div class="cp-attrs" id="hud-stats"></div>
         </div>
+
+        <div class="hud-compass" aria-hidden="true">
+          <div class="hc-line"></div>
+          <div class="hc-tick"></div>
+          <div class="hc-n">N</div>
+          <div class="hc-tick"></div>
+          <div class="hc-line"></div>
+        </div>
+
         <div class="hud-actions" id="hud-actions"></div>
       </div>
 
-      <div class="world-center">
-        <div class="welcome-text">Bem-vindo ao GRPG</div>
-        <div class="character-name-large" id="hud-name-large">—</div>
-        <div class="guild-line" id="hud-guild" style="display:none"></div>
-        <div class="location-badge" id="hud-location-badge">—</div>
-        <div class="title-badge" id="hud-title-badge" style="display:none"></div>
+      <div class="world-center" id="world-center">
+        <div class="wc-ring"></div>
+        <div class="wc-conn">— World Connection Established —</div>
+        <div class="wc-welcome">Bem-vindo ao GRPG</div>
+        <div class="wc-guild" id="hud-guild" style="display:none"></div>
+        <div class="wc-name" id="hud-name-large">—</div>
+        <div class="wc-diamond"></div>
+        <div class="wc-loc" id="hud-location-badge">—</div>
+        <div class="wc-title" id="hud-title-badge" style="display:none"></div>
       </div>
 
-      <div class="stats-panel" id="hud-stats"></div>
+      <div class="hud-location">
+        <div class="cp-corner tl"></div>
+        <div class="cp-corner br"></div>
+        <div class="hl-label">Localização Atual // 01</div>
+        <div class="hl-name" id="hud-location">—</div>
+        <div class="hl-region" id="hud-region"></div>
+        <div class="hl-line"></div>
+      </div>
 
-      <div class="hud-bottom">
-        <div class="location-info">
-          <div class="location-label">Localização Atual</div>
-          <div class="location-name" id="hud-location">—</div>
-          <div class="location-label" id="hud-region" style="margin-top:2px"></div>
-        </div>
-        <div class="quick-actions">
-          <button class="btn-quick" data-panel="inventory">Inventário</button>
-          <button class="btn-quick" data-panel="equipment">Equipamento</button>
-          <button class="btn-quick" data-panel="skills">Skills</button>
-          <button class="btn-quick" data-panel="party">Party</button>
-          <button class="btn-quick" data-panel="titles">Títulos</button>
-        </div>
+      <div class="hud-dock">
+        <button class="dock-btn" data-panel="inventory" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h16v12H4z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/></svg>
+          Inventário
+        </button>
+        <button class="dock-btn" data-panel="equipment" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l3 5h-6l3-5z"/><path d="M7 8l-2 13h14L17 8"/></svg>
+          Equipamento
+        </button>
+        <button class="dock-btn" data-panel="skills" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="3"/></svg>
+          Skills
+        </button>
+        <button class="dock-btn" data-panel="party" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><path d="M14 20c0-2 1.5-3.5 4-3.5s3 1 3 3.5"/></svg>
+          Party
+        </button>
+        <button class="dock-btn" data-panel="titles" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M8 14l-2 8 6-3 6 3-2-8"/></svg>
+          Títulos
+        </button>
       </div>
 
       <div id="panel-overlay" class="panel-overlay hidden"></div>
@@ -103,6 +135,7 @@ export class WorldUI {
     `;
     document.body.appendChild(this.container);
     this.updateHUD();
+    this.startWelcomeSequence();
   }
 
   updateHUD() {
@@ -111,14 +144,12 @@ export class WorldUI {
     const hpPercent = Math.max(0, Math.min(100, ((p.hp || 0) / (p.maxHp || 1)) * 100));
     const mpPercent = Math.max(0, Math.min(100, ((p.mp || 0) / (p.maxMp || 1)) * 100));
     const initial = (p.displayName || p.account || '?').charAt(0).toUpperCase();
+    const level = String(p.level || 1).padStart(2, '0');
 
-    // Avatar
     const avatarEl = this.container.querySelector('#hud-avatar');
     if (avatarEl) {
       if (p.avatarUrl) {
         avatarEl.style.backgroundImage = `url(${p.avatarUrl})`;
-        avatarEl.style.backgroundSize = 'cover';
-        avatarEl.style.backgroundPosition = 'center';
         avatarEl.textContent = '';
       } else {
         avatarEl.style.backgroundImage = '';
@@ -127,7 +158,7 @@ export class WorldUI {
     }
 
     this.setText('hud-name', p.displayName || p.account || '—');
-    this.setText('hud-level', `Lv. ${p.level || 1}  ·  ${p.class || 'Aventureiro'}`);
+    this.setText('hud-level', `LV. ${level} · ${(p.class || 'Aventureiro').toUpperCase()}`);
     this.setText('hud-name-large', p.displayName || p.account || '—');
     this.setText('hud-location-badge', p.location || 'Cidade dos Iniciantes');
     this.setText('hud-location', p.location || 'Cidade dos Iniciantes');
@@ -140,7 +171,6 @@ export class WorldUI {
     if (hpFill) hpFill.style.width = `${hpPercent}%`;
     if (mpFill) mpFill.style.width = `${mpPercent}%`;
 
-    // Condição
     const cond = p.condition || 'normal';
     const condEl = this.container.querySelector('#hud-condition');
     if (condEl) {
@@ -148,7 +178,6 @@ export class WorldUI {
       condEl.className = `condition-badge cond-${cond}`;
     }
 
-    // Zona
     const zone = p.zoneType || 'safe';
     const zoneEl = this.container.querySelector('#hud-zone');
     if (zoneEl) {
@@ -156,7 +185,6 @@ export class WorldUI {
       zoneEl.className = `zone-badge zone-${zone}`;
     }
 
-    // Guilda
     const guildEl = this.container.querySelector('#hud-guild');
     if (guildEl) {
       if (p.guild) {
@@ -167,7 +195,6 @@ export class WorldUI {
       }
     }
 
-    // Título
     const titleBadge = this.container.querySelector('#hud-title-badge');
     if (titleBadge) {
       if (p.activeTitle) {
@@ -178,28 +205,35 @@ export class WorldUI {
       }
     }
 
-    // Stats
     const statsEl = this.container.querySelector('#hud-stats');
     if (statsEl) {
       const s = p.stats || {};
+      const fmt = (n) => String(n ?? 10).padStart(2, '0');
       statsEl.innerHTML = `
-        <div class="stats-title">Status</div>
-        <div class="stat-row"><span>STR</span><span>${s.str ?? 10}</span></div>
-        <div class="stat-row"><span>AGI</span><span>${s.agi ?? 10}</span></div>
-        <div class="stat-row"><span>VIT</span><span>${s.vit ?? 10}</span></div>
-        <div class="stat-row"><span>INT</span><span>${s.int ?? 10}</span></div>
-        <div class="stat-row"><span>DEX</span><span>${s.dex ?? 10}</span></div>
-        <div class="stat-row"><span>LUK</span><span>${s.luk ?? 10}</span></div>
+        <div>STR <span>${fmt(s.str)}</span></div>
+        <div>INT <span>${fmt(s.int)}</span></div>
+        <div>AGI <span>${fmt(s.agi)}</span></div>
+        <div>DEX <span>${fmt(s.dex)}</span></div>
+        <div>VIT <span>${fmt(s.vit)}</span></div>
+        <div>LUK <span>${fmt(s.luk)}</span></div>
       `;
     }
 
-    // Actions
     const actions = this.container.querySelector('#hud-actions');
     if (actions) {
       actions.innerHTML = `
-        ${p.isAdmin ? '<button class="btn-hud admin" id="btn-admin">Admin</button>' : ''}
-        <button class="btn-hud" id="btn-menu">Menu</button>
-        <button class="btn-hud logout" id="btn-logout">Sair</button>
+        ${p.isAdmin ? `<button class="btn-hud admin" id="btn-admin" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+          Admin
+        </button>` : ''}
+        <button class="btn-hud" id="btn-menu" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg>
+          Menu
+        </button>
+        <button class="btn-hud logout" id="btn-logout" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M16 12H8M13 8l4 4-4 4"/></svg>
+          Disconnect
+        </button>
       `;
       actions.querySelector('#btn-logout')?.addEventListener('click', () => this.handleLogout());
       actions.querySelector('#btn-menu')?.addEventListener('click', () => this.openPanel('menu'));
@@ -212,8 +246,20 @@ export class WorldUI {
     if (el) el.textContent = text ?? '';
   }
 
+  startWelcomeSequence() {
+    const center = this.container?.querySelector('#world-center');
+    if (!center) return;
+    // Após ~3.2s a mensagem central some e libera o espaço
+    setTimeout(() => {
+      center.classList.add('fade-away');
+      setTimeout(() => {
+        center.style.display = 'none';
+      }, 950);
+    }, 3200);
+  }
+
   bindEvents() {
-    this.container.querySelectorAll('.btn-quick').forEach(btn => {
+    this.container.querySelectorAll('.dock-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         Sound.click();
         this.openPanel(btn.dataset.panel);
