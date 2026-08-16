@@ -23,6 +23,8 @@ export class WorldUI {
     this.onLogout = onLogout;
     this.container = null;
     this.currentPanel = null;
+    this._escHandler = null;
+    this._closing = false;
   }
 
   show() {
@@ -140,6 +142,34 @@ export class WorldUI {
         <button class="dock-btn" data-panel="titles" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M8 14l-2 8 6-3 6 3-2-8"/></svg>
           Títulos
+        </button>
+      </div>
+
+      <div class="mobile-system-launcher" id="mobile-launcher">
+        <div class="msl-menu" id="msl-menu">
+          <button class="msl-item" data-panel="inventory" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h16v12H4z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/></svg>
+            Inventário
+          </button>
+          <button class="msl-item" data-panel="equipment" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l3 5h-6l3-5z"/><path d="M7 8l-2 13h14L17 8"/></svg>
+            Equipamento
+          </button>
+          <button class="msl-item" data-panel="skills" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="3"/></svg>
+            Skills
+          </button>
+          <button class="msl-item" data-panel="party" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><path d="M14 20c0-2 1.5-3.5 4-3.5s3 1 3 3.5"/></svg>
+            Party
+          </button>
+          <button class="msl-item" data-panel="titles" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M8 14l-2 8 6-3 6 3-2-8"/></svg>
+            Títulos
+          </button>
+        </div>
+        <button class="msl-toggle" id="msl-toggle" type="button" aria-label="Menu do sistema">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
         </button>
       </div>
 
@@ -308,8 +338,54 @@ export class WorldUI {
         this.openPanel(btn.dataset.panel);
       });
     });
+    this.container.querySelectorAll('.msl-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        Sound.click();
+        this.closeMobileLauncher();
+        this.openPanel(btn.dataset.panel);
+      });
+    });
+    const mslToggle = this.container.querySelector('#msl-toggle');
+    if (mslToggle) {
+      mslToggle.addEventListener('click', () => {
+        Sound.click();
+        this.toggleMobileLauncher();
+      });
+    }
     this.container.querySelector('#panel-overlay').addEventListener('click', (e) => {
       if (e.target.id === 'panel-overlay') this.closePanel();
+    });
+    this._escHandler = (e) => {
+      if (e.key === 'Escape') {
+        if (this.currentPanel) {
+          e.preventDefault();
+          this.closePanel();
+        } else {
+          this.closeMobileLauncher();
+        }
+      }
+    };
+    document.addEventListener('keydown', this._escHandler);
+  }
+
+  toggleMobileLauncher() {
+    const menu = this.container?.querySelector('#msl-menu');
+    const toggle = this.container?.querySelector('#msl-toggle');
+    if (!menu || !toggle) return;
+    const open = menu.classList.toggle('open');
+    toggle.classList.toggle('open', open);
+  }
+
+  closeMobileLauncher() {
+    const menu = this.container?.querySelector('#msl-menu');
+    const toggle = this.container?.querySelector('#msl-toggle');
+    menu?.classList.remove('open');
+    toggle?.classList.remove('open');
+  }
+
+  updateDockActive(name) {
+    this.container?.querySelectorAll('.dock-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.panel === name);
     });
   }
 
@@ -326,22 +402,61 @@ export class WorldUI {
   }
 
   openPanel(name) {
+    if (this._closing) return;
     if (this.currentPanel === name) return this.closePanel();
     this.currentPanel = name;
+    this.updateDockActive(name);
     Sound.panel();
     this.renderCurrentPanel();
   }
 
   closePanel() {
+    if (this._closing) return;
     this.currentPanel = null;
+    this.updateDockActive(null);
     const overlay = this.container?.querySelector('#panel-overlay');
-    if (overlay) { overlay.classList.add('hidden'); overlay.innerHTML = ''; }
+    if (!overlay || overlay.classList.contains('hidden')) return;
+
+    this._closing = true;
+    overlay.classList.add('closing');
+    overlay.classList.remove('visible');
+    const finish = () => {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('closing');
+      overlay.innerHTML = '';
+      this._closing = false;
+    };
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) finish();
+    else setTimeout(finish, 170);
+  }
+
+  /** Helper: build a system window shell */
+  buildSysWindow(title, bodyHtml, extraClass = '') {
+    return `
+      <div class="sys-window ${extraClass}">
+        <div class="sys-window-header">
+          <div>
+            <h2>${title}</h2>
+          </div>
+          <button class="btn-close" id="close-p" type="button" aria-label="Fechar">✕</button>
+        </div>
+        <div class="sys-window-body">${bodyHtml}</div>
+      </div>`;
+  }
+
+  showOverlay(overlay, html) {
+    overlay.innerHTML = html;
+    overlay.classList.remove('hidden', 'closing');
+    // force reflow then animate in
+    void overlay.offsetWidth;
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    overlay.querySelector('#close-p')?.addEventListener('click', () => this.closePanel());
   }
 
   renderCurrentPanel() {
     const overlay = this.container.querySelector('#panel-overlay');
     if (!overlay || !this.currentPanel) return;
-    overlay.classList.remove('hidden');
     const map = {
       menu: () => this.renderMenu(overlay),
       inventory: () => this.renderInventory(overlay),
@@ -357,14 +472,7 @@ export class WorldUI {
 
   async renderGuild(overlay) {
     const p = this.player;
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Guilda</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body" id="guild-panel-body">
-          <p style="color:#94a3b8;font-size:0.85rem">Carregando...</p>
-        </div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    this.showOverlay(overlay, this.buildSysWindow('Guilda', '<div id="guild-panel-body"><p style="color:#94a3b8;font-size:0.85rem">Carregando...</p></div>'));
     const body = overlay.querySelector('#guild-panel-body');
 
     try {
@@ -563,10 +671,7 @@ export class WorldUI {
       ? `<p><strong>Guilda:</strong> ${p.guildTag ? `[${this.escape(p.guildTag)}] ` : ''}${this.escape(p.guild || '')}${p.guildRole ? ` · ${this.escape(p.guildRole)}` : ''}</p>`
       : '<p><strong>Guilda:</strong> —</p>';
 
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Menu</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body">
+    const body = `
           <div class="menu-section">
             <h3>Personagem</h3>
             <p><strong>Nome:</strong> ${this.escape(p.displayName)}</p>
@@ -596,10 +701,8 @@ export class WorldUI {
           </div>
           <div class="menu-section">
             <button class="btn-panel" id="menu-logout">Sair do Jogo</button>
-          </div>
-        </div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+          </div>`;
+    this.showOverlay(overlay, this.buildSysWindow('Menu', body));
     overlay.querySelector('#menu-logout').onclick = () => this.handleLogout();
     overlay.querySelector('#menu-guild').onclick = () => {
       Sound.click();
@@ -616,50 +719,38 @@ export class WorldUI {
 
   renderInventory(overlay) {
     const items = this.player.inventory || [];
-    let html = items.length === 0
-      ? `<div class="empty-inventory">Inventário vazio.<br>O mestre distribuirá itens nas cenas.</div>`
-      : items.map(item => `
-        <div class="inv-item ${this.rarityClass(item.rarity)}">
-          <div>
-            <div class="inv-item-name">
-              ${this.escape(item.name || 'Item')}
-              <span class="rarity-tag">${RARITY_LABELS[(item.rarity || 'comum').toLowerCase()] || 'Comum'}</span>
-            </div>
-            ${item.description ? `<div class="inv-desc">${this.escape(item.description)}</div>` : ''}
+    let body;
+    if (items.length === 0) {
+      body = `<div class="empty-inventory">Inventário vazio.<br>O mestre distribuirá itens nas cenas.</div>`;
+    } else {
+      body = `<div class="inv-grid">${items.map(item => `
+        <div class="inv-card ${this.rarityClass(item.rarity)}">
+          <div class="inv-card-name">${this.escape(item.name || 'Item')}</div>
+          ${item.description ? `<div class="inv-card-desc">${this.escape(item.description)}</div>` : ''}
+          <div class="inv-card-meta">
+            <span class="rarity-tag">${RARITY_LABELS[(item.rarity || 'comum').toLowerCase()] || 'Comum'}</span>
+            <span class="inv-card-qty">×${item.qty || 1}</span>
           </div>
-          <div class="inv-item-qty">x${item.qty || 1}</div>
-        </div>`).join('');
-
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Inventário</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body"><div class="inventory-grid">${html}</div></div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+        </div>`).join('')}</div>`;
+    }
+    this.showOverlay(overlay, this.buildSysWindow('Inventário', body));
   }
 
   renderSkills(overlay) {
     const skills = (this.player.skills && this.player.skills.length)
       ? this.player.skills
       : this.getDefaultSkills();
-    const html = skills.map(s => `
-      <div class="inv-item">
-        <div>
-          <div class="inv-item-name">${this.escape(s.name)}</div>
-          <div class="inv-desc">${this.escape(s.description || '')}</div>
-        </div>
-        <div class="inv-item-qty">${this.escape(s.type || 'Ativa')}</div>
-      </div>`).join('');
-
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Skills</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body">
-          <div class="menu-section"><h3>Classe: ${this.escape(this.player.class || 'Aventureiro')}</h3></div>
-          <div class="inventory-grid">${html}</div>
-        </div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    const body = `
+      <div class="menu-section"><h3>Classe · ${this.escape(this.player.class || 'Aventureiro')}</h3></div>
+      <div class="skills-grid">${skills.map(s => `
+        <div class="skill-card">
+          <div class="skill-card-top">
+            <div class="skill-card-name">${this.escape(s.name)}</div>
+            <span class="skill-card-type">${this.escape(s.type || 'Ativa')}</span>
+          </div>
+          ${s.description ? `<div class="skill-card-desc">${this.escape(s.description)}</div>` : ''}
+        </div>`).join('')}</div>`;
+    this.showOverlay(overlay, this.buildSysWindow('Skills', body, 'sys-wide'));
   }
 
   getDefaultSkills() {
@@ -692,85 +783,84 @@ export class WorldUI {
 
   renderParty(overlay) {
     const party = this.player.party || [];
-    let html = party.length === 0
-      ? `<div class="empty-inventory">Você não está em nenhuma party.<br><br>Partys são formadas pelo mestre no Discord.</div>`
-      : party.map(m => `
-        <div class="inv-item">
-          <div>
-            <div class="inv-item-name">${this.escape(m.name)}</div>
-            <div class="inv-desc">${this.escape(m.class || '')} · Lv.${m.level || '?'}</div>
-          </div>
-          <div class="inv-item-qty">${this.escape(m.role || 'Membro')}</div>
-        </div>`).join('');
-
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Party</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body"><div class="inventory-grid">${html}</div></div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    let body;
+    if (party.length === 0) {
+      body = `<div class="empty-inventory">Você não está em nenhuma party.<br><br>Partys são formadas pelo mestre no Discord.</div>`;
+    } else {
+      body = `<div class="party-grid">${party.map(m => `
+        <div class="party-card">
+          <div class="party-card-name">${this.escape(m.name)}</div>
+          <div class="party-card-meta">${this.escape(m.class || '—')} · Lv.${m.level || '?'}</div>
+          <span class="party-card-role">${this.escape(m.role || 'Membro')}</span>
+        </div>`).join('')}</div>`;
+    }
+    this.showOverlay(overlay, this.buildSysWindow('Party', body));
   }
 
   renderEquipment(overlay) {
     const eq = this.player.equipment || {};
-    const slots = [
-      { key: 'cabeca', label: 'Cabeça' }, { key: 'peito', label: 'Peito' },
-      { key: 'maos', label: 'Mãos' }, { key: 'pernas', label: 'Pernas' },
-      { key: 'pes', label: 'Pés' }, { key: 'arma', label: 'Arma' },
-      { key: 'acessorio1', label: 'Acessório 1' }, { key: 'acessorio2', label: 'Acessório 2' }
-    ];
-    const html = slots.map(s => {
-      const item = eq[s.key];
+    const initial = (this.player.displayName || this.player.account || '?').charAt(0).toUpperCase();
+
+    const slotHtml = (key, label) => {
+      const item = eq[key];
       const rarity = item ? this.rarityClass(item.rarity) : '';
       return `
-        <div class="inv-item ${rarity}">
-          <div>
-            <div class="inv-item-name">${s.label}</div>
-            <div class="inv-desc">${item ? this.escape(item.name) : '— vazio —'}${item?.description ? ' · ' + this.escape(item.description) : ''}</div>
-          </div>
-          ${item?.rarity ? `<span class="rarity-tag">${RARITY_LABELS[(item.rarity || '').toLowerCase()] || ''}</span>` : ''}
+        <div class="equip-slot ${item ? 'filled' : ''} ${rarity}">
+          <div class="equip-slot-label">${label}</div>
+          ${item
+            ? `<div class="equip-slot-name">${this.escape(item.name)}</div>
+               ${item.rarity ? `<span class="rarity-tag">${RARITY_LABELS[(item.rarity || '').toLowerCase()] || ''}</span>` : ''}
+               ${item.description ? `<div class="equip-slot-desc">${this.escape(item.description)}</div>` : ''}`
+            : `<div class="equip-slot-empty">— vazio —</div>`}
         </div>`;
-    }).join('');
+    };
 
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Equipamento</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body"><div class="inventory-grid">${html}</div></div>
+    const body = `
+      <div class="equip-layout">
+        <div class="equip-col left">
+          ${slotHtml('cabeca', 'Cabeça')}
+          ${slotHtml('peito', 'Peito')}
+          ${slotHtml('maos', 'Mãos')}
+        </div>
+        <div class="equip-center">
+          <div class="equip-silhouette">
+            <span class="equip-avatar-initial">${this.escape(initial)}</span>
+          </div>
+        </div>
+        <div class="equip-col right">
+          ${slotHtml('pernas', 'Pernas')}
+          ${slotHtml('pes', 'Pés')}
+          ${slotHtml('arma', 'Arma')}
+        </div>
+        <div class="equip-bottom-row">
+          ${slotHtml('acessorio1', 'Acessório 1')}
+          ${slotHtml('acessorio2', 'Acessório 2')}
+        </div>
       </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    this.showOverlay(overlay, this.buildSysWindow('Equipamento', body, 'sys-equip'));
   }
 
   renderTitles(overlay) {
     const titles = this.player.titles || [];
     const active = this.player.activeTitle || null;
-    let html = titles.length === 0
-      ? `<div class="empty-inventory">Nenhum título conquistado ainda.</div>`
-      : titles.map(t => `
-        <div class="inv-item ${active === t.name ? 'title-active' : ''}">
-          <div>
-            <div class="inv-item-name">${this.escape(t.name)}${active === t.name ? ' ★' : ''}</div>
-            <div class="inv-desc">${this.escape(t.description || '')}${t.bonus ? ' · Bônus: ' + this.escape(t.bonus) : ''}</div>
-          </div>
-        </div>`).join('');
-
-    overlay.innerHTML = `
-      <div class="side-panel">
-        <div class="panel-header"><h2>Títulos</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body">
-          ${active ? `<div class="menu-section"><h3>Título Ativo</h3><p>${this.escape(active)}</p></div>` : ''}
-          <div class="inventory-grid">${html}</div>
-        </div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    let body = '';
+    if (active) {
+      body += `<div class="title-active-banner"><span class="star">★</span><span>${this.escape(active)}</span></div>`;
+    }
+    if (titles.length === 0) {
+      body += `<div class="empty-inventory">Nenhum título conquistado ainda.</div>`;
+    } else {
+      body += `<div class="titles-grid">${titles.map(t => `
+        <div class="title-card ${active === t.name ? 'active' : ''}">
+          <div class="title-card-name">${this.escape(t.name)}${active === t.name ? ' ★' : ''}</div>
+          ${t.description || t.bonus ? `<div class="title-card-desc">${this.escape(t.description || '')}${t.bonus ? (t.description ? ' · ' : '') + 'Bônus: ' + this.escape(t.bonus) : ''}</div>` : ''}
+        </div>`).join('')}</div>`;
+    }
+    this.showOverlay(overlay, this.buildSysWindow('Títulos', body));
   }
 
   async renderAdmin(overlay) {
-    overlay.innerHTML = `
-      <div class="side-panel admin-panel">
-        <div class="panel-header"><h2>Painel Admin</h2><button class="btn-close" id="close-p">✕</button></div>
-        <div class="panel-body"><p style="color:#94a3b8;font-size:0.85rem">Carregando...</p></div>
-      </div>`;
-    overlay.querySelector('#close-p').onclick = () => this.closePanel();
+    this.showOverlay(overlay, this.buildSysWindow('Painel Admin', '<p style="color:#94a3b8;font-size:0.85rem">Carregando...</p>', 'sys-admin'));
     try {
       let players = [];
       let guilds = [];
@@ -779,7 +869,7 @@ export class WorldUI {
       try {
         players = await this.authService.getAllPlayers();
       } catch (err) {
-        overlay.querySelector('.panel-body').innerHTML =
+        overlay.querySelector('.sys-window-body').innerHTML =
           `<p style="color:#fca5a5">Erro ao carregar jogadores: ${this.escape(err.message || String(err))}</p>
            <p style="color:#64748b;font-size:0.8rem;margin-top:8px">Verifique as regras do Firebase em <code>players</code>.</p>`;
         return;
@@ -794,13 +884,13 @@ export class WorldUI {
 
       this.renderAdminList(overlay, players, guilds, guildsError);
     } catch (err) {
-      overlay.querySelector('.panel-body').innerHTML =
+      overlay.querySelector('.sys-window-body').innerHTML =
         `<p style="color:#fca5a5">Erro ao carregar dados: ${this.escape(err.message || String(err))}</p>`;
     }
   }
 
   renderAdminList(overlay, players, guilds = [], guildsError = null) {
-    const body = overlay.querySelector('.panel-body');
+    const body = overlay.querySelector('.sys-window-body');
     const pending = guilds.filter((g) => g.status === 'pending');
     const active = guilds.filter((g) => g.status === 'active');
 
@@ -1583,6 +1673,10 @@ export class WorldUI {
 
   hide() {
     this.authService.stopPlayerListener();
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
     if (this.container) {
       this.container.classList.remove('visible');
       setTimeout(() => this.container?.remove(), 800);
